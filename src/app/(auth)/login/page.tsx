@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { signIn } from 'next-auth/react'
+import { useAuth } from '@/contexts/AuthContext'
 import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -12,8 +12,10 @@ import { Loader2 } from 'lucide-react'
 
 export default function LoginPage() {
   const router = useRouter()
+  const { signIn, signInWithMagicLink } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [magicLinkSent, setMagicLinkSent] = useState(false)
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -25,20 +27,24 @@ export default function LoginPage() {
     const password = formData.get('password') as string
 
     try {
-      const result = await signIn('credentials', {
-        email,
-        password,
-        redirect: false,
-      })
+      await signIn(email, password)
+      // signIn handles redirect to /practice
+    } catch (error: any) {
+      setError(error.message || 'Invalid email or password')
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
-      if (result?.error) {
-        setError('Invalid email or password')
-      } else {
-        router.push('/dashboard')
-        router.refresh()
-      }
-    } catch (error) {
-      setError('An error occurred. Please try again.')
+  async function handleMagicLink(email: string) {
+    setIsLoading(true)
+    setError(null)
+    
+    try {
+      await signInWithMagicLink(email)
+      setMagicLinkSent(true)
+    } catch (error: any) {
+      setError(error.message || 'Failed to send magic link')
     } finally {
       setIsLoading(false)
     }
@@ -89,6 +95,18 @@ export default function LoginPage() {
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Sign In
             </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() => {
+                const email = (document.getElementById('email') as HTMLInputElement).value
+                if (email) handleMagicLink(email)
+              }}
+              disabled={isLoading}
+            >
+              Send magic link instead
+            </Button>
             <p className="text-sm text-center text-gray-600">
               Don't have an account?{' '}
               <Link href="/register" className="text-blue-600 hover:underline">
@@ -98,6 +116,27 @@ export default function LoginPage() {
           </CardFooter>
         </form>
       </Card>
+      
+      {magicLinkSent && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle>Check your email!</CardTitle>
+              <CardDescription>
+                We sent a magic link to your email. Click the link to sign in.
+              </CardDescription>
+            </CardHeader>
+            <CardFooter>
+              <Button 
+                onClick={() => setMagicLinkSent(false)} 
+                className="w-full"
+              >
+                Back to login
+              </Button>
+            </CardFooter>
+          </Card>
+        </div>
+      )}
     </div>
   )
 }

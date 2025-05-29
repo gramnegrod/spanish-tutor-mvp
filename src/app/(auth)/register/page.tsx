@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useAuth } from '@/contexts/AuthContext'
 import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -11,8 +12,10 @@ import { Loader2 } from 'lucide-react'
 
 export default function RegisterPage() {
   const router = useRouter()
+  const { signUp } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState(false)
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -24,25 +27,40 @@ export default function RegisterPage() {
     const password = formData.get('password') as string
     const name = formData.get('name') as string
 
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters')
+      setIsLoading(false)
+      return
+    }
+
     try {
-      const response = await fetch('/api/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, name }),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        setError(data.error || 'Registration failed')
-      } else {
-        router.push('/login')
-      }
-    } catch (error) {
-      setError('An error occurred. Please try again.')
+      await signUp(email, password)
+      setSuccess(true)
+    } catch (error: any) {
+      setError(error.message || 'Registration failed')
     } finally {
       setIsLoading(false)
     }
+  }
+
+  if (success) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle>Check your email!</CardTitle>
+            <CardDescription>
+              We sent a confirmation link to your email. Please check your inbox to verify your account.
+            </CardDescription>
+          </CardHeader>
+          <CardFooter>
+            <Link href="/login" className="w-full">
+              <Button className="w-full">Go to login</Button>
+            </Link>
+          </CardFooter>
+        </Card>
+      </div>
+    )
   }
 
   return (

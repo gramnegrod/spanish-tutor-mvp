@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { useSession } from 'next-auth/react'
+import { useAuth } from '@/contexts/AuthContext'
 import { ConversationUI } from '@/components/audio/ConversationUI'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -11,7 +11,7 @@ import { ArrowLeft, RefreshCw, Mic, Loader2 } from 'lucide-react'
 
 export default function PracticePage() {
   const router = useRouter()
-  const { data: session, status } = useSession()
+  const { user, loading } = useAuth()
   const [conversationStartTime, setConversationStartTime] = useState<Date | null>(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [transcripts, setTranscripts] = useState<Array<{speaker: string; text: string; timestamp: Date}>>([])
@@ -50,11 +50,10 @@ export default function PracticePage() {
   })
 
   useEffect(() => {
-    // Temporarily disabled for testing
-    // if (status === 'unauthenticated') {
-    //   router.push('/login')
-    // }
-  }, [status, router])
+    if (!loading && !user) {
+      router.push('/login')
+    }
+  }, [user, loading, router])
 
   // Start conversation timer when first transcript appears
   useEffect(() => {
@@ -127,10 +126,9 @@ export default function PracticePage() {
     dismissWarning()
   }
 
-  // Skip loading check for now
-  // if (status === 'loading') {
-  //   return <div className="min-h-screen flex items-center justify-center">Loading...</div>
-  // }
+  if (loading) {
+    return <div className="min-h-screen flex items-center justify-center">Loading...</div>
+  }
 
   return (
     <div className="min-h-screen p-4">
