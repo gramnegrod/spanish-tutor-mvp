@@ -1,0 +1,130 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// NextAuth Models
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String?   @unique
+  emailVerified DateTime?
+  name          String?
+  image         String?
+  password      String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  // Learning data
+  streak        Int       @default(0)
+  lastPractice  DateTime?
+  level         Level     @default(TURISTA)
+  
+  // Relations
+  accounts      Account[]
+  sessions      Session[]
+  conversations Conversation[]
+  progress      Progress?
+
+  @@map("users")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// Application Models
+model Conversation {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String?
+  persona     Persona  @default(TAQUERO)
+  transcript  Json?    // Full conversation data
+  analysis    Json?    // GPT-4o-mini analysis
+  audioUrl    String?  // Stored audio recording
+  duration    Int?     // Duration in seconds
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("conversations")
+}
+
+model Progress {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  vocabulary   String   @default("[]") // Store as JSON string for SQLite
+  
+  // Skill levels (0-100)
+  pronunciation Int     @default(0)
+  grammar       Int     @default(0)
+  fluency       Int     @default(0)
+  culturalKnowledge Int @default(0)
+  
+  // Stats
+  totalMinutes Int      @default(0)
+  wordsLearned Int      @default(0)
+  
+  updatedAt    DateTime @updatedAt
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("progress")
+}
+
+// Enums
+enum Level {
+  TURISTA    // Beginner
+  AMIGO      // Intermediate
+  CHILANGO   // Advanced
+}
+
+enum Persona {
+  TAQUERO      // Street vendor - casual, friendly
+  PROFESIONAL  // Office worker - formal
+  CHAVITO      // Teenager - slang, modern
+  ABUELA       // Grandmother - traditional, patient
+}
