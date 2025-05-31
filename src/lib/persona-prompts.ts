@@ -137,8 +137,8 @@ TRANSICIONES NATURALES:
 /**
  * Get a simple description of what each persona teaches
  */
-export function getPersonaDescription(persona: keyof typeof PERSONA_PROMPTS): string {
-  const descriptions = {
+export function getPersonaDescription(persona: string): string {
+  const descriptions: Record<string, string> = {
     TAQUERO: "Street food vendor - Learn casual Mexican Spanish, food vocabulary, and everyday expressions",
     PROFESIONAL: "Office professional - Learn formal Spanish, business vocabulary, and workplace communication",
     CHAVITO: "Mexican teenager - Learn current slang, informal speech, and youth culture",

@@ -65,7 +65,12 @@ export interface CostTracking {
   totalCost: number;
 }
 
+// Global initialization lock to prevent race conditions
+let globalInitLock = false;
+
 export class OpenAIRealtimeService {
+  private static activeInstance: OpenAIRealtimeService | null = null;
+  
   private pc: RTCPeerConnection | null = null;
   private dc: RTCDataChannel | null = null;
   private mediaStream: MediaStream | null = null;
@@ -84,6 +89,7 @@ export class OpenAIRealtimeService {
   // Conversation history for smart summary
   private conversationHistory: Array<{role: 'user' | 'assistant', text: string, timestamp: Date}> = [];
   private summarizedContext: string = '';
+  private speechStartTime: number | null = null;
   
   // Cost tracking
   private costTracking: CostTracking = {
@@ -98,16 +104,25 @@ export class OpenAIRealtimeService {
     totalCost: 0
   };
   
-  // Pricing constants (per 1M tokens)
+  // Pricing constants - OpenAI Realtime API pricing as of Jan 2025
   private readonly PRICING = {
-    audioInput: 100,      // $100 per 1M tokens (~$0.06/min)
-    audioOutput: 200,     // $200 per 1M tokens (~$0.24/min)
-    textInput: 5,         // $5 per 1M tokens
-    textOutput: 20,       // $20 per 1M tokens
-    audioTokensPerSecond: 1000  // Approximate tokens per second for audio
+    // Audio pricing is per minute, not per token!
+    audioInputPerMinute: 0.06,    // $0.06 per minute of audio input
+    audioOutputPerMinute: 0.24,   // $0.24 per minute of audio output
+    textInput: 5,                 // $5 per 1M tokens (not used in voice-only)
+    textOutput: 20,               // $20 per 1M tokens (not used in voice-only)
   };
 
   constructor(config: RealtimeConfig = {}, events: RealtimeEvents = {}) {
+    // Ensure only one active instance
+    if (OpenAIRealtimeService.activeInstance) {
+      console.warn('[OpenAIRealtimeService] Disconnecting previous instance...');
+      OpenAIRealtimeService.activeInstance.disconnect();
+      // Add delay to ensure cleanup
+      const delay = new Promise(resolve => setTimeout(resolve, 100));
+    }
+    OpenAIRealtimeService.activeInstance = this;
+    
     this.config = {
       tokenEndpoint: '/api/session',
       model: 'gpt-4o-realtime-preview-2024-12-17',
@@ -129,30 +144,98 @@ export class OpenAIRealtimeService {
   }
 
   async connect(audioElement?: HTMLAudioElement): Promise<void> {
+    // Check global initialization lock
+    if (globalInitLock) {
+      console.warn('[OpenAIRealtimeService] Another connection is initializing, skipping...');
+      return;
+    }
+    
+    console.log('[OpenAIRealtimeService] Starting connection process...');
+    
     try {
+      // Set global lock
+      globalInitLock = true;
+      
+      // Prevent duplicate connections
+      if (this.pc && (this.pc.connectionState === 'connected' || this.pc.connectionState === 'connecting')) {
+        console.warn('[OpenAIRealtimeService] Already connected or connecting, skipping...');
+        globalInitLock = false; // Release lock before returning
+        return;
+      }
+      
+      // If an audio element is provided, mark it as external
+      if (audioElement) {
+        audioElement.setAttribute('data-external', 'true');
+      }
+      
       this.audioElement = audioElement || this.createAudioElement();
+      console.log('[OpenAIRealtimeService] Audio element ready');
       
       // Get ephemeral token
       this.updateStatus('Getting ephemeral key...');
+      console.log('[OpenAIRealtimeService] Fetching ephemeral key from:', this.config.tokenEndpoint);
       const ephemeralKey = await this.getEphemeralKey();
+      console.log('[OpenAIRealtimeService] Got ephemeral key:', ephemeralKey.substring(0, 20) + '...');
       
-      // Create peer connection
+      // Add validation
+      if (!ephemeralKey || ephemeralKey.length < 20) {
+        throw new Error('Invalid ephemeral key received');
+      }
+      
+      // Create peer connection with ICE servers
       this.updateStatus('Creating connection...');
-      this.pc = new RTCPeerConnection();
+      this.pc = new RTCPeerConnection({
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' }
+        ]
+      });
+      console.log('[OpenAIRealtimeService] RTCPeerConnection created with ICE servers');
       
       // Set up audio playback
       this.pc.ontrack = (e) => {
-        if (this.audioElement) {
-          this.audioElement.srcObject = e.streams[0];
+        console.log('[OpenAIRealtimeService] Received audio track:', e.track.kind);
+        if (this.audioElement && e.track.kind === 'audio') {
+          // Ensure we only set the stream once and it's not the same stream
+          const currentStream = this.audioElement.srcObject as MediaStream;
+          if (!currentStream || currentStream.id !== e.streams[0].id) {
+            // Remove old stream if exists
+            if (currentStream) {
+              currentStream.getTracks().forEach(track => track.stop());
+            }
+            this.audioElement.srcObject = e.streams[0];
+            console.log('[OpenAIRealtimeService] Audio stream attached to element');
+          } else {
+            console.warn('[OpenAIRealtimeService] Audio element already has this stream, ignoring...');
+          }
         }
       };
       
       // Monitor connection state
       this.pc.onconnectionstatechange = () => {
-        console.log('Connection state:', this.pc?.connectionState);
+        console.log('[OpenAIRealtimeService] Connection state changed:', this.pc?.connectionState);
         if (this.pc?.connectionState === 'disconnected' || this.pc?.connectionState === 'failed') {
-          this.handleError(new Error('Connection lost'));
+          console.error('[OpenAIRealtimeService] Connection lost - state:', this.pc?.connectionState);
+          // Don't immediately error on disconnect, give it a chance to reconnect
+          if (this.pc?.connectionState === 'failed') {
+            this.handleError(new Error('Connection failed'));
+          }
+        } else if (this.pc?.connectionState === 'connected') {
+          console.log('[OpenAIRealtimeService] WebRTC connection established!');
         }
+      };
+      
+      // Monitor ICE connection state
+      this.pc.oniceconnectionstatechange = () => {
+        console.log('[OpenAIRealtimeService] ICE connection state:', this.pc?.iceConnectionState);
+        if (this.pc?.iceConnectionState === 'failed') {
+          console.error('[OpenAIRealtimeService] ICE connection failed');
+        }
+      };
+      
+      // Monitor ICE gathering state
+      this.pc.onicegatheringstatechange = () => {
+        console.log('[OpenAIRealtimeService] ICE gathering state:', this.pc?.iceGatheringState);
       };
       
       // Add microphone
@@ -166,20 +249,31 @@ export class OpenAIRealtimeService {
       
       // Create and send offer
       this.updateStatus('Connecting to OpenAI...');
+      console.log('[OpenAIRealtimeService] Creating WebRTC offer...');
       const offer = await this.pc.createOffer();
       await this.pc.setLocalDescription(offer);
+      console.log('[OpenAIRealtimeService] Local description set');
       
       // Connect to OpenAI
+      console.log('[OpenAIRealtimeService] Sending offer to OpenAI...');
       const answer = await this.sendOfferToOpenAI(offer.sdp!, ephemeralKey);
+      console.log('[OpenAIRealtimeService] Got answer from OpenAI');
       await this.pc.setRemoteDescription(answer);
+      console.log('[OpenAIRealtimeService] Remote description set');
       
       this.updateStatus('Connected!');
+      console.log('[OpenAIRealtimeService] Successfully connected!');
       this.startSessionTimers();
       this.events.onConnect?.();
+      console.log('[OpenAIRealtimeService] onConnect event fired');
       
     } catch (error) {
+      console.error('[OpenAIRealtimeService] Connection error:', error);
       this.handleError(error as Error);
       throw error;
+    } finally {
+      // Release global lock
+      globalInitLock = false;
     }
   }
 
@@ -198,6 +292,9 @@ export class OpenAIRealtimeService {
   }
 
   disconnect(): void {
+    console.log('[OpenAIRealtimeService] Disconnect called');
+    console.trace(); // Log stack trace to see where disconnect is being called from
+    
     // Clear timers
     if (this.warningTimer) {
       clearTimeout(this.warningTimer);
@@ -226,9 +323,19 @@ export class OpenAIRealtimeService {
       this.pc = null;
     }
     
-    // Stop audio playback
+    // Stop audio playback and remove element if we created it
     if (this.audioElement) {
       this.audioElement.srcObject = null;
+      // Remove from DOM if we created it
+      if (this.audioElement.parentNode && !this.audioElement.hasAttribute('data-external')) {
+        this.audioElement.remove();
+      }
+      this.audioElement = null;
+    }
+    
+    // Clear active instance if it's this one
+    if (OpenAIRealtimeService.activeInstance === this) {
+      OpenAIRealtimeService.activeInstance = null;
     }
     
     this.updateStatus('Disconnected');
@@ -294,17 +401,33 @@ export class OpenAIRealtimeService {
   private calculateCosts(): void {
     const costs = { ...this.costTracking };
     
-    // Calculate audio costs
-    const audioInputTokens = costs.audioInputSeconds * this.PRICING.audioTokensPerSecond;
-    const audioOutputTokens = costs.audioOutputSeconds * this.PRICING.audioTokensPerSecond;
+    // Convert seconds to minutes for pricing calculation
+    const audioInputMinutes = costs.audioInputSeconds / 60;
+    const audioOutputMinutes = costs.audioOutputSeconds / 60;
     
-    costs.audioInputCost = (audioInputTokens / 1_000_000) * this.PRICING.audioInput;
-    costs.audioOutputCost = (audioOutputTokens / 1_000_000) * this.PRICING.audioOutput;
+    // Calculate audio costs based on per-minute pricing
+    costs.audioInputCost = audioInputMinutes * this.PRICING.audioInputPerMinute;
+    costs.audioOutputCost = audioOutputMinutes * this.PRICING.audioOutputPerMinute;
+    
+    // Text costs are minimal in voice conversations (only for instructions)
     costs.textInputCost = (costs.textInputTokens / 1_000_000) * this.PRICING.textInput;
     costs.textOutputCost = (costs.textOutputTokens / 1_000_000) * this.PRICING.textOutput;
     
     costs.totalCost = costs.audioInputCost + costs.audioOutputCost + 
                       costs.textInputCost + costs.textOutputCost;
+    
+    // Debug logging with corrected calculation
+    if (costs.audioInputSeconds > 0 || costs.audioOutputSeconds > 0) {
+      console.log('[OpenAIRealtimeService] Cost Update:', {
+        inputSeconds: costs.audioInputSeconds.toFixed(2),
+        outputSeconds: costs.audioOutputSeconds.toFixed(2),
+        inputMinutes: audioInputMinutes.toFixed(2),
+        outputMinutes: audioOutputMinutes.toFixed(2),
+        inputCost: `$${costs.audioInputCost.toFixed(4)}`,
+        outputCost: `$${costs.audioOutputCost.toFixed(4)}`,
+        totalCost: `$${costs.totalCost.toFixed(4)}`
+      });
+    }
     
     this.costTracking = costs;
     this.events.onCostUpdate?.(costs);
@@ -323,17 +446,33 @@ export class OpenAIRealtimeService {
   }
 
   private async getEphemeralKey(): Promise<string> {
-    const response = await fetch(this.config.tokenEndpoint!);
-    if (!response.ok) {
-      throw new Error(`Failed to get ephemeral key: ${response.status}`);
+    try {
+      console.log('[OpenAIRealtimeService] Fetching ephemeral key from:', this.config.tokenEndpoint);
+      const response = await fetch(this.config.tokenEndpoint!);
+      console.log('[OpenAIRealtimeService] Session API response status:', response.status);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[OpenAIRealtimeService] Session API error:', errorText);
+        throw new Error(`Failed to get ephemeral key: ${response.status} - ${errorText}`);
+      }
+      
+      const data = await response.json();
+      console.log('[OpenAIRealtimeService] Session API response:', { 
+        hasClientSecret: !!data.client_secret,
+        hasValue: !!data.client_secret?.value 
+      });
+      
+      if (!data.client_secret?.value) {
+        console.error('[OpenAIRealtimeService] Invalid response structure:', data);
+        throw new Error('No client secret received');
+      }
+      
+      return data.client_secret.value;
+    } catch (error) {
+      console.error('[OpenAIRealtimeService] Error in getEphemeralKey:', error);
+      throw error;
     }
-    
-    const data = await response.json();
-    if (!data.client_secret?.value) {
-      throw new Error('No client secret received');
-    }
-    
-    return data.client_secret.value;
   }
 
   private async sendOfferToOpenAI(sdp: string, ephemeralKey: string): Promise<RTCSessionDescriptionInit> {
@@ -361,17 +500,26 @@ export class OpenAIRealtimeService {
   private setupDataChannel(): void {
     if (!this.dc) return;
     
+    console.log('[OpenAIRealtimeService] Setting up data channel...');
+    
     this.dc.onopen = () => {
+      console.log('[OpenAIRealtimeService] Data channel opened!');
       this.configureSession();
     };
     
     this.dc.onmessage = (e) => {
       const event = JSON.parse(e.data);
+      console.log('[OpenAIRealtimeService] Received event:', event.type);
       this.handleRealtimeEvent(event);
     };
     
     this.dc.onerror = (error) => {
+      console.error('[OpenAIRealtimeService] Data channel error:', error);
       this.handleError(new Error('Data channel error'));
+    };
+    
+    this.dc.onclose = () => {
+      console.log('[OpenAIRealtimeService] Data channel closed');
     };
   }
 
@@ -414,21 +562,37 @@ export class OpenAIRealtimeService {
         
       case 'input_audio_buffer.speech_started':
         this.events.onSpeechStart?.();
+        // Track speech start time for cost calculation
+        this.speechStartTime = Date.now();
         break;
         
       case 'input_audio_buffer.speech_stopped':
         this.events.onSpeechStop?.();
+        // Calculate speech duration when stopped
+        if (this.speechStartTime) {
+          const speechDuration = Date.now() - this.speechStartTime;
+          this.trackAudioDuration('input', speechDuration);
+          this.speechStartTime = null;
+        }
         break;
         
       case 'conversation.item.input_audio_transcription.completed':
-        if (this.config.enableInputTranscription) {
-          this.events.onTranscript?.('user', event.transcript);
+        // Track user speech when transcription is completed
+        this.events.onTranscript?.('user', event.transcript);
+        // Also attempt to track audio duration from transcript timing
+        if (event.duration_ms) {
+          this.trackAudioDuration('input', event.duration_ms);
         }
         break;
         
       case 'response.audio_transcript.done':
+        console.log('[OpenAIRealtimeService] Assistant transcript:', event.transcript);
         this.addToConversationHistory('assistant', event.transcript);
         this.events.onTranscript?.('assistant', event.transcript);
+        break;
+        
+      case 'response.audio_transcript.delta':
+        console.log('[OpenAIRealtimeService] Assistant transcript delta:', event.delta);
         break;
         
       // Cost tracking events
@@ -492,8 +656,18 @@ export class OpenAIRealtimeService {
   }
 
   private createAudioElement(): HTMLAudioElement {
+    // Clean up any existing audio elements first
+    const existingAudio = document.querySelectorAll('audio[data-openai-realtime="true"]');
+    existingAudio.forEach(audio => {
+      console.warn('[OpenAIRealtimeService] Removing orphaned audio element');
+      audio.remove();
+    });
+    
     const audio = document.createElement('audio');
     audio.autoplay = true;
+    audio.setAttribute('data-openai-realtime', 'true');
+    // Add to body so it persists
+    document.body.appendChild(audio);
     return audio;
   }
 

@@ -8,15 +8,30 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { useOpenAIRealtime } from '@/hooks/useOpenAIRealtime'
 import { ArrowLeft, RefreshCw, Mic, Loader2 } from 'lucide-react'
+import { detectComprehension } from '@/lib/pedagogical-system'
+import { ConversationTranscript } from '@/types'
+import { conversationService, progressService } from '@/lib/supabase-db'
+import { ConversationAnalysisService } from '@/services/conversation-analysis'
 
 export default function PracticePage() {
+  console.log('[Practice] Component rendering...');
   const router = useRouter()
-  const { user, loading } = useAuth()
+  const { user, loading, signOut } = useAuth()
+  console.log('[Practice] Auth state:', { user: !!user, loading });
   const [conversationStartTime, setConversationStartTime] = useState<Date | null>(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
-  const [transcripts, setTranscripts] = useState<Array<{speaker: string; text: string; timestamp: Date}>>([])
+  const [transcripts, setTranscripts] = useState<ConversationTranscript[]>([])
   const [currentSpeaker, setCurrentSpeaker] = useState<string | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
+
+  // Track learner profile
+  const [learnerProfile, setLearnerProfile] = useState({
+    level: 'beginner' as const,
+    comfortWithSlang: false,
+    needsMoreEnglish: true,
+    strugglingWords: [] as string[],
+    masteredPhrases: [] as string[]
+  });
 
   const {
     isConnected,
@@ -29,31 +44,109 @@ export default function PracticePage() {
     extendSession,
     handleSessionContinue,
     startFreshSession,
-    dismissWarning
+    dismissWarning,
+    updateInstructions,
+    connect,
+    disconnect,
+    audioRef
   } = useOpenAIRealtime({
-    instructions: `You are a friendly Mexican taco vendor (taquero) in Mexico City. 
-    You speak naturally in Mexican Spanish, using local slang and expressions.
-    Keep responses brief and conversational, as if talking to a customer at your taco stand.
-    If asked to explain something, provide the explanation in the language requested.
-    Be warm, friendly, and encourage the conversation about tacos and Mexican food culture.`,
+    enableInputTranscription: true, // Enable to get user transcripts
+    instructions: `You are a friendly Mexican taco vendor (taquero) in Mexico City at a busy street stand.
+
+PERSONALITY:
+- Name: Don Roberto, 45 years old, been selling tacos for 20 years
+- Warm, patient, loves to chat with customers
+- Proud of your tacos, especially your al pastor
+- Call people "güero/güera", "joven", "amigo/amiga"
+
+IMPORTANT RULES:
+- Wait for the customer to speak first before greeting
+- If you hear silence or unclear sounds, DO NOT respond
+- Only greet ONCE when you hear clear speech
+- Never repeat greetings
+
+LANGUAGE APPROACH:
+- Start in simple, friendly Mexican Spanish
+- If customer seems confused, IMMEDIATELY switch to Spanglish
+- Example: "¿Qué le doy, joven?... Ah, you don't understand? No problem! What can I get you? Tengo tacos de pastor, carnitas..."
+- When teaching, say things like: "Mira, 'al pastor' is like... es pork pero with pineapple, ¿me entiendes?"
+
+TEACHING STYLE:
+- Never give grammar lessons
+- Correct by example: If they say "Yo querer tacos" you say "Ah, ¿quieres tacos? ¡Claro que sí!"
+- Celebrate attempts: "¡Órale! ¡Muy bien!" "¡Eso, así se dice!"
+- Share culture: "You know, aquí en México we eat tacos for breakfast too!"
+
+MENU & PRICES:
+- Al pastor (con piña): 15 pesos
+- Carnitas: 12 pesos  
+- Suadero: 12 pesos
+- Bistec: 15 pesos
+- Quesadillas: 20 pesos
+
+REMEMBER: You're not a language teacher, you're a taco vendor who happens to help tourists learn Spanish naturally.`,
     voice: 'alloy',
-    autoConnect: true,
+    autoConnect: false, // Changed to false to prevent race conditions
+    turnDetection: {
+      type: 'server_vad',
+      threshold: 0.7, // Increased from default 0.5 to reduce false triggers
+      prefixPaddingMs: 500, // Increased from 300ms
+      silenceDurationMs: 800 // Increased from 200ms to wait longer before responding
+    },
     onTranscript: (role, text) => {
       setTranscripts(prev => [...prev, {
-        speaker: role,
+        id: crypto.randomUUID(),
+        speaker: role as 'user' | 'assistant',
         text,
         timestamp: new Date()
       }]);
       setCurrentSpeaker(role);
       setTimeout(() => setCurrentSpeaker(null), 1000);
+      
+      // Analyze comprehension if user spoke
+      if (role === 'user') {
+        const { understood, confidence } = detectComprehension(text);
+        if (!understood && confidence < 0.3) {
+          // User seems confused, adapt the prompt
+          setLearnerProfile(prev => ({ ...prev, needsMoreEnglish: true }));
+        } else if (understood && confidence > 0.7) {
+          // User is doing well
+          setLearnerProfile(prev => ({ ...prev, needsMoreEnglish: false }));
+        }
+      }
     }
   })
 
   useEffect(() => {
     if (!loading && !user) {
+      console.log('[Practice] No user found, redirecting to login...');
       router.push('/login')
+    } else if (!loading && user) {
+      console.log('[Practice] User found:', user.email);
     }
   }, [user, loading, router])
+
+  // Simplified connection state - no auto-connect
+  const [hasManuallyConnected, setHasManuallyConnected] = useState(false);
+  
+  // Manual connect function for button
+  const handleConnect = async () => {
+    if (!user) {
+      console.error('[Practice] No user for connection');
+      return;
+    }
+    
+    console.log('[Practice] Manual connect triggered...');
+    setHasManuallyConnected(true);
+    
+    try {
+      await connect();
+      console.log('[Practice] Manual connect successful');
+    } catch (err) {
+      console.error('[Practice] Manual connect failed:', err);
+      setHasManuallyConnected(false);
+    }
+  };
 
   // Start conversation timer when first transcript appears
   useEffect(() => {
@@ -65,6 +158,10 @@ export default function PracticePage() {
   const handleEndConversation = async () => {
     if (transcripts.length === 0) return
 
+    // Disconnect the voice service first
+    disconnect();
+    setHasManuallyConnected(false);
+    
     setIsAnalyzing(true)
     const endTime = new Date()
     const duration = conversationStartTime 
@@ -72,40 +169,97 @@ export default function PracticePage() {
       : 0
 
     try {
-      // Save conversation
-      const conversationResponse = await fetch('/api/conversations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: 'Taco Ordering Practice',
-          persona: 'TAQUERO',
-          transcript: transcripts,
-          duration
-        })
+      if (!user) {
+        throw new Error('User not authenticated')
+      }
+
+      // Save conversation to Supabase
+      console.log('[Practice] Saving conversation to Supabase...');
+      const conversation = await conversationService.create({
+        user_id: user.id,
+        title: 'Taco Ordering Practice',
+        persona: 'TAQUERO',
+        transcript: transcripts,
+        duration
       })
+      console.log('[Practice] Conversation saved with ID:', conversation.id);
 
-      const { conversation } = await conversationResponse.json()
+      // Analyze conversation using text-only analysis
+      const analysisService = new ConversationAnalysisService()
+      const analysis = await analysisService.analyzeConversation(
+        transcripts,
+        'beginner', // TODO: Get actual user level
+        ['order_food', 'ask_price', 'polite_interaction']
+      )
 
-      // Analyze conversation
-      await fetch('/api/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conversationId: conversation.id })
+      // Update conversation with analysis
+      await conversationService.updateAnalysis(conversation.id, analysis)
+
+      // Extract vocabulary for progress tracking
+      const vocabulary = analysisService.extractVocabulary(transcripts)
+
+      // Update user progress
+      console.log('[Practice] Updating user progress...');
+      const progressUpdate = await progressService.incrementStats(user.id, {
+        minutes_practiced: Math.ceil(duration / 60),
+        conversations_completed: 1,
+        // Simple progress increments based on analysis
+        pronunciation_improvement: analysis.quality_assessment.engagement > 0.7 ? 2 : 1,
+        grammar_improvement: analysis.mistakes.length < 3 ? 2 : 1,
+        fluency_improvement: analysis.conversation_metrics.wordsPerMinute > 60 ? 2 : 1,
+        cultural_improvement: analysis.cultural_notes.length > 0 ? 2 : 1
       })
+      console.log('[Practice] Progress updated:', {
+        totalConversations: progressUpdate.conversations_completed,
+        totalMinutes: progressUpdate.total_minutes_practiced,
+        pronunciation: progressUpdate.pronunciation,
+        grammar: progressUpdate.grammar,
+        fluency: progressUpdate.fluency,
+        cultural: progressUpdate.cultural_knowledge
+      });
 
-      // Update progress
-      await fetch('/api/progress', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          minutesPracticed: Math.ceil(duration / 60),
-          vocabulary: extractVocabulary(transcripts)
-        })
-      })
+      // Add new vocabulary
+      if (vocabulary.length > 0) {
+        await progressService.addVocabulary(user.id, vocabulary)
+      }
 
-      router.push('/dashboard')
+      // Show detailed analysis results
+      const analysisMessage = `
+🎉 Conversation Analysis Complete!
+
+📊 Performance Metrics:
+• Words per minute: ${analysis.conversation_metrics.wordsPerMinute}
+• Total duration: ${Math.round(analysis.conversation_metrics.totalDuration)}s
+• New vocabulary: ${vocabulary.length} words
+• Completion: ${Math.round(analysis.quality_assessment.completeness * 100)}%
+• Engagement: ${Math.round(analysis.quality_assessment.engagement * 100)}%
+
+✅ What you did well:
+${analysis.wins.slice(0, 3).map(w => `• ${w}`).join('\n')}
+
+📝 Areas to improve:
+${analysis.mistakes.slice(0, 3).map(m => `• ${m}`).join('\n')}
+
+🎯 Recommendations:
+${analysis.recommendations.slice(0, 2).map(r => `• ${r}`).join('\n')}
+
+Progress Updated:
+• Pronunciation: +${analysis.quality_assessment.engagement > 0.7 ? 2 : 1} points
+• Grammar: +${analysis.mistakes.length < 3 ? 2 : 1} points
+• Fluency: +${analysis.conversation_metrics.wordsPerMinute > 60 ? 2 : 1} points
+• Cultural Knowledge: +${analysis.cultural_notes.length > 0 ? 2 : 1} points
+      `.trim()
+      
+      alert(analysisMessage)
+      
     } catch (error) {
       console.error('Failed to save conversation:', error)
+      
+      // Create fallback analysis if detailed analysis fails
+      const analysisService = new ConversationAnalysisService()
+      const fallbackAnalysis = ConversationAnalysisService.createFallbackAnalysis(transcripts)
+      
+      alert(`Conversation saved with basic analysis. Used ${fallbackAnalysis.vocabulary_used.length} vocabulary words.`)
     } finally {
       setIsAnalyzing(false)
     }
@@ -137,13 +291,23 @@ export default function PracticePage() {
         <div className="flex items-center justify-between">
           <Button
             variant="ghost"
-            onClick={() => router.push('/dashboard')}
+            onClick={() => router.push('/')}
             className="flex items-center gap-2"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to Dashboard
+            Back
           </Button>
           <h1 className="text-2xl font-bold">Practice with Taquero</h1>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600">{user?.email}</span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => signOut()}
+            >
+              Logout
+            </Button>
+          </div>
         </div>
 
         {/* Main Content */}
@@ -160,7 +324,7 @@ export default function PracticePage() {
               <ConversationUI 
                 transcripts={transcripts}
                 isProcessing={isProcessing}
-                currentSpeaker={currentSpeaker}
+                currentSpeaker={currentSpeaker as 'user' | 'assistant' | null}
               />
               {/* Cost Display */}
               {costs && (
@@ -204,10 +368,13 @@ export default function PracticePage() {
             <CardHeader>
               <CardTitle>Voice Control</CardTitle>
               <CardDescription>
-                {isConnected ? 'Speak naturally in Spanish' : 'Connecting...'}
+                {isConnected ? 'Speak naturally in Spanish' : 'Click Connect to start practicing'}
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col items-center space-y-6">
+              {/* Hidden audio element for voice playback */}
+              <audio ref={audioRef} autoPlay hidden />
+              
               {/* Connection Status */}
               <div className="text-center">
                 {isConnected ? (
@@ -220,9 +387,16 @@ export default function PracticePage() {
                 ) : (
                   <div className="flex flex-col items-center gap-4">
                     <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center">
-                      <Loader2 className="h-10 w-10 text-gray-400 animate-spin" />
+                      <Loader2 className="h-10 w-10 text-gray-400" />
                     </div>
-                    <p className="text-sm text-gray-600">Connecting to tutor...</p>
+                    <Button 
+                      onClick={handleConnect}
+                      disabled={!user || hasManuallyConnected}
+                      className="px-8"
+                    >
+                      {hasManuallyConnected ? 'Connecting...' : 'Connect'}
+                    </Button>
+                    <p className="text-sm text-gray-600">Ready to start your Spanish practice</p>
                   </div>
                 )}
               </div>
@@ -253,6 +427,43 @@ export default function PracticePage() {
                   <p className="font-semibold text-xs">Need help?</p>
                   <p className="text-xs mt-1">Say "explícame" or "teach me" to get explanations</p>
                   <p className="text-xs">Say "in English" for English explanations</p>
+                </div>
+                
+                <div className="mt-3 pt-3 border-t border-gray-200">
+                  <p className="font-semibold text-xs mb-2">Today's Menu:</p>
+                  <div className="text-xs space-y-1">
+                    <div className="flex justify-between">
+                      <span>🐷 Al Pastor (pork + 🍍)</span>
+                      <span>$15</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>🥩 Carnitas (crispy pork)</span>
+                      <span>$12</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>🥩 Suadero (beef)</span>
+                      <span>$12</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>🧀 Quesadilla</span>
+                      <span>$20</span>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="mt-3 pt-3 border-t border-gray-200">
+                  <p className="font-semibold text-xs mb-2">Learning Progress:</p>
+                  <div className="text-xs">
+                    <div className="flex items-center gap-2">
+                      <span>Comprehension:</span>
+                      <div className="flex-1 bg-gray-200 rounded-full h-2">
+                        <div 
+                          className="bg-green-500 h-2 rounded-full transition-all"
+                          style={{ width: `${learnerProfile.needsMoreEnglish ? '30%' : '70%'}` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </CardContent>
@@ -326,7 +537,7 @@ function extractVocabulary(transcripts: any[]): string[] {
   transcripts.forEach(t => {
     if (t.speaker === 'assistant') {
       const spanishWords = t.text.toLowerCase().split(/\s+/)
-      spanishWords.forEach(word => {
+      spanishWords.forEach((word: string) => {
         if (word.length > 3) {
           words.add(word.replace(/[.,!?]/g, ''))
         }

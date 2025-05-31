@@ -1,24 +1,20 @@
 import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { conversationService, dbHelpers } from '@/lib/supabase-db'
 
 export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    // Get authenticated user
+    const user = await dbHelpers.getCurrentUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
     }
 
-    const conversations = await prisma.conversation.findMany({
-      where: { userId: session.user.id },
-      orderBy: { createdAt: 'desc' },
-      take: 10
-    })
+    // Get conversations for the authenticated user
+    const conversations = await conversationService.getByUserId(user.id)
 
     return NextResponse.json({ conversations })
   } catch (error) {
-    console.error('Conversations fetch error:', error)
+    console.error('Error fetching conversations:', error)
     return NextResponse.json(
       { error: 'Failed to fetch conversations' },
       { status: 500 }
@@ -28,26 +24,34 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    // Get authenticated user
+    const user = await dbHelpers.getCurrentUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
     }
 
-    const { title, persona, transcript, duration } = await request.json()
+    const body = await request.json()
+    const { title, persona, transcript, duration } = body
 
-    const conversation = await prisma.conversation.create({
-      data: {
-        userId: session.user.id,
-        title: title || `Practice with ${persona}`,
-        persona: persona || 'TAQUERO',
-        transcript,
-        duration
-      }
+    if (!title || !transcript) {
+      return NextResponse.json(
+        { error: 'title and transcript are required' },
+        { status: 400 }
+      )
+    }
+
+    // Create conversation in Supabase
+    const conversation = await conversationService.create({
+      user_id: user.id,
+      title,
+      persona: persona || 'Taco Vendor',
+      transcript,
+      duration: duration || 0
     })
 
-    return NextResponse.json({ conversation })
+    return NextResponse.json({ conversation }, { status: 201 })
   } catch (error) {
-    console.error('Conversation creation error:', error)
+    console.error('Error creating conversation:', error)
     return NextResponse.json(
       { error: 'Failed to create conversation' },
       { status: 500 }

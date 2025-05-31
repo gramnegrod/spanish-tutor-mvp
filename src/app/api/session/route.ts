@@ -2,8 +2,19 @@ import { NextResponse } from 'next/server'
 
 export async function GET() {
   try {
-    // Use the API key from environment or hardcode for testing
-    const apiKey = process.env.OPENAI_API_KEY || '***REMOVED***'
+    // TEMPORARY: Hardcode the API key to get it working
+    // TODO: Fix environment variable loading in Next.js 15.1.5
+    const apiKey = '***REMOVED***';
+    
+    console.log('Session API - Using hardcoded key temporarily');
+    
+    if (!apiKey) {
+      console.error('No OpenAI API key found');
+      return NextResponse.json(
+        { error: 'OpenAI API key not configured' },
+        { status: 500 }
+      )
+    }
     
     const response = await fetch("https://api.openai.com/v1/realtime/sessions", {
       method: "POST",
@@ -19,9 +30,13 @@ export async function GET() {
 
     if (!response.ok) {
       const error = await response.text()
-      console.error('OpenAI API error:', error)
+      console.error('OpenAI API error:', {
+        status: response.status,
+        statusText: response.statusText,
+        error
+      })
       return NextResponse.json(
-        { error: 'Failed to create session' },
+        { error: `Failed to create session: ${response.status} ${response.statusText}` },
         { status: response.status }
       )
     }
@@ -29,10 +44,10 @@ export async function GET() {
     const data = await response.json()
     return NextResponse.json(data)
     
-  } catch (error) {
+  } catch (error: any) {
     console.error('Session creation error:', error)
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: `Internal server error: ${error.message}` },
       { status: 500 }
     )
   }

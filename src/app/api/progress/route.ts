@@ -1,35 +1,40 @@
 import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { progressService, dbHelpers } from '@/lib/supabase-db'
 
 export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    // Get authenticated user
+    const user = await dbHelpers.getCurrentUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
     }
 
-    const progress = await prisma.progress.findUnique({
-      where: { userId: session.user.id }
-    })
+    // Get progress for the authenticated user
+    const progress = await progressService.getByUserId(user.id)
+    
+    // Calculate streak (simplified for now)
+    const streak = progress?.conversations_completed || 0
 
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: {
-        streak: true,
-        lastPractice: true,
-        level: true
-      }
-    })
+    // Determine level based on progress
+    const totalScore = (progress?.pronunciation || 0) + (progress?.grammar || 0) + 
+                      (progress?.fluency || 0) + (progress?.cultural_knowledge || 0)
+    const level = totalScore < 100 ? 'beginner' : totalScore < 200 ? 'intermediate' : 'advanced'
 
     return NextResponse.json({
-      progress,
-      streak: user?.streak || 0,
-      level: user?.level || 'TURISTA'
+      progress: progress || {
+        vocabulary: [],
+        pronunciation: 0,
+        grammar: 0,
+        fluency: 0,
+        cultural_knowledge: 0,
+        total_minutes_practiced: 0,
+        conversations_completed: 0
+      },
+      streak,
+      level
     })
   } catch (error) {
-    console.error('Progress fetch error:', error)
+    console.error('Error fetching progress:', error)
     return NextResponse.json(
       { error: 'Failed to fetch progress' },
       { status: 500 }
@@ -39,73 +44,46 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    // Get authenticated user
+    const user = await dbHelpers.getCurrentUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
     }
 
-    const { vocabulary, minutesPracticed } = await request.json()
+    const body = await request.json()
+    const { 
+      vocabulary, 
+      minutesPracticed, 
+      pronunciationImprovement,
+      grammarImprovement,
+      fluencyImprovement,
+      culturalImprovement
+    } = body
 
-    // Update or create progress
-    const currentProgress = await prisma.progress.findUnique({
-      where: { userId: session.user.id }
-    })
-    
-    const currentVocab = currentProgress ? JSON.parse(currentProgress.vocabulary) : []
-    const newVocab = [...currentVocab, ...(vocabulary || [])]
-    
-    const progress = await prisma.progress.upsert({
-      where: { userId: session.user.id },
-      create: {
-        userId: session.user.id,
-        vocabulary: JSON.stringify(vocabulary || []),
-        totalMinutes: minutesPracticed || 0,
-        wordsLearned: vocabulary?.length || 0
-      },
-      update: {
-        vocabulary: JSON.stringify(newVocab),
-        totalMinutes: {
-          increment: minutesPracticed || 0
-        },
-        wordsLearned: {
-          increment: vocabulary?.length || 0
-        }
-      }
+    // Update progress using increment function
+    const progress = await progressService.incrementStats(user.id, {
+      minutes_practiced: minutesPracticed || 0,
+      conversations_completed: 1,
+      pronunciation_improvement: pronunciationImprovement || 0,
+      grammar_improvement: grammarImprovement || 0,
+      fluency_improvement: fluencyImprovement || 0,
+      cultural_improvement: culturalImprovement || 0
     })
 
-    // Update user's last practice and streak
-    const lastPractice = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { lastPractice: true, streak: true }
-    })
-
-    const now = new Date()
-    const lastPracticeDate = lastPractice?.lastPractice
-    let newStreak = 1
-
-    if (lastPracticeDate) {
-      const daysSinceLastPractice = Math.floor(
-        (now.getTime() - lastPracticeDate.getTime()) / (1000 * 60 * 60 * 24)
-      )
-
-      if (daysSinceLastPractice === 1) {
-        newStreak = (lastPractice.streak || 0) + 1
-      } else if (daysSinceLastPractice === 0) {
-        newStreak = lastPractice.streak || 1
-      }
+    // Add vocabulary if provided
+    if (vocabulary && vocabulary.length > 0) {
+      await progressService.addVocabulary(user.id, vocabulary)
     }
 
-    await prisma.user.update({
-      where: { id: session.user.id },
-      data: {
-        lastPractice: now,
-        streak: newStreak
-      }
-    })
+    // Calculate new streak
+    const streak = progress.conversations_completed || 0
 
-    return NextResponse.json({ progress, streak: newStreak })
+    return NextResponse.json({ 
+      progress,
+      streak
+    })
   } catch (error) {
-    console.error('Progress update error:', error)
+    console.error('Error updating progress:', error)
     return NextResponse.json(
       { error: 'Failed to update progress' },
       { status: 500 }

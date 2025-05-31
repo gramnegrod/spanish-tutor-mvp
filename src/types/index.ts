@@ -1,6 +1,41 @@
-import { User, Conversation, Progress, Level, Persona } from '@prisma/client'
+// Type definitions for the Spanish Tutor app
+// These were previously imported from Prisma but we're using Supabase
 
-export type { User, Conversation, Progress, Level, Persona }
+export type Level = 'beginner' | 'intermediate' | 'advanced'
+export type Persona = 'TAQUERO' | 'BARISTA' | 'MERCADO_VENDOR' | 'TOUR_GUIDE' | 'DOCTOR' | 'TEACHER'
+
+export interface User {
+  id: string
+  email: string
+  created_at?: string
+  updated_at?: string
+}
+
+export interface Conversation {
+  id: string
+  user_id: string
+  title: string
+  persona: Persona
+  transcript: ConversationTranscript[]
+  duration: number
+  analysis?: any
+  created_at: string
+  updated_at: string
+}
+
+export interface Progress {
+  id: string
+  user_id: string
+  vocabulary: string[]
+  pronunciation: number
+  grammar: number
+  fluency: number
+  cultural_knowledge: number
+  total_minutes_practiced: number
+  conversations_completed: number
+  created_at: string
+  updated_at: string
+}
 
 export interface RealtimeEvent {
   type: string

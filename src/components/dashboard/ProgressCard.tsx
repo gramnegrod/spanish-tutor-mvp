@@ -1,7 +1,7 @@
 'use client'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Progress } from '@prisma/client'
+import { Progress } from '@/types'
 import { TrendingUp, Book, Mic, Brain, Globe } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
@@ -33,7 +33,7 @@ export function ProgressCard({ progress, streak }: ProgressCardProps) {
     },
     { 
       name: 'Cultural Knowledge', 
-      value: progress?.culturalKnowledge || 0, 
+      value: progress?.cultural_knowledge || 0, 
       icon: Globe,
       color: 'bg-purple-500'
     },
@@ -54,11 +54,11 @@ export function ProgressCard({ progress, streak }: ProgressCardProps) {
         {/* Stats */}
         <div className="grid grid-cols-2 gap-4">
           <div className="text-center p-4 bg-gray-50 rounded-lg">
-            <p className="text-2xl font-bold">{progress?.totalMinutes || 0}</p>
+            <p className="text-2xl font-bold">{progress?.total_minutes_practiced || 0}</p>
             <p className="text-sm text-gray-600">Minutes Practiced</p>
           </div>
           <div className="text-center p-4 bg-gray-50 rounded-lg">
-            <p className="text-2xl font-bold">{progress?.wordsLearned || 0}</p>
+            <p className="text-2xl font-bold">{progress?.vocabulary?.length || 0}</p>
             <p className="text-sm text-gray-600">Words Learned</p>
           </div>
         </div>
@@ -96,7 +96,7 @@ export function ProgressCard({ progress, streak }: ProgressCardProps) {
             <div className="flex flex-wrap gap-2">
               {(() => {
                 try {
-                  const vocab = JSON.parse(progress.vocabulary)
+                  const vocab = progress.vocabulary
                   return vocab.slice(-5).map((word: string) => (
                     <span
                       key={word}

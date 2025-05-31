@@ -38,9 +38,10 @@ export interface UseOpenAIRealtimeReturn {
   extendSession: () => void;
   startFreshSession: () => void;
   dismissWarning: () => void;
+  handleSessionContinue: (continueSession: boolean) => void;
   
   // Refs for audio element
-  audioRef: React.RefObject<HTMLAudioElement>;
+  audioRef: React.RefObject<HTMLAudioElement | null>;
 }
 
 export function useOpenAIRealtime(options: UseOpenAIRealtimeOptions = {}): UseOpenAIRealtimeReturn {
@@ -65,11 +66,20 @@ export function useOpenAIRealtime(options: UseOpenAIRealtimeOptions = {}): UseOp
   
   // Initialize service
   useEffect(() => {
+    // Clean initialization
+    if (serviceRef.current) {
+      console.log('[useOpenAIRealtime] Service already exists, cleaning up...');
+      serviceRef.current.disconnect();
+      serviceRef.current = null;
+    }
+    
     const events: RealtimeEvents = {
       onConnect: () => {
+        console.log('[useOpenAIRealtime] onConnect fired');
         setIsConnected(true);
         setIsConnecting(false);
         setStatus('Connected');
+        console.log('[useOpenAIRealtime] State updated - connected');
       },
       onDisconnect: () => {
         setIsConnected(false);
@@ -123,7 +133,9 @@ export function useOpenAIRealtime(options: UseOpenAIRealtimeOptions = {}): UseOp
     
     return () => {
       if (serviceRef.current) {
+        console.log('[useOpenAIRealtime] Cleaning up service...');
         serviceRef.current.disconnect();
+        serviceRef.current = null;
       }
     };
   }, []); // Only initialize once
@@ -172,12 +184,27 @@ export function useOpenAIRealtime(options: UseOpenAIRealtimeOptions = {}): UseOp
     setShowTimeWarning(false);
   }, []);
   
+  const handleSessionContinue = useCallback((continueSession: boolean) => {
+    if (continueSession) {
+      extendSession();
+    } else {
+      // End session - disconnect and clear everything
+      disconnect();
+      setShowSessionComplete(false);
+      if (sessionCompleteResolver.current) {
+        sessionCompleteResolver.current(false);
+        sessionCompleteResolver.current = null;
+      }
+    }
+  }, [disconnect, extendSession]);
+  
   // Auto-connect if requested
   useEffect(() => {
-    if (options.autoConnect) {
+    if (options.autoConnect && !isConnected && !isConnecting) {
+      console.log('[useOpenAIRealtime] Auto-connecting...');
       connect();
     }
-  }, [options.autoConnect]);
+  }, []); // Only run once on mount, not when options change
   
   return {
     // State
@@ -202,6 +229,7 @@ export function useOpenAIRealtime(options: UseOpenAIRealtimeOptions = {}): UseOp
     extendSession,
     startFreshSession,
     dismissWarning,
+    handleSessionContinue,
     
     // Refs
     audioRef

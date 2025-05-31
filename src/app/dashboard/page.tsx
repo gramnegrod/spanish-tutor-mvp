@@ -1,9 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { signOut } from 'next-auth/react'
+import { useAuth } from '@/contexts/AuthContext'
 import { ProgressCard } from '@/components/dashboard/ProgressCard'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -12,7 +11,7 @@ import { Mic, LogOut, Trophy, Calendar } from 'lucide-react'
 import { formatDuration } from '@/lib/utils'
 
 export default function DashboardPage() {
-  const { data: session, status } = useSession()
+  const { user, loading, signOut } = useAuth()
   const router = useRouter()
   const [progress, setProgress] = useState<Progress | null>(null)
   const [streak, setStreak] = useState(0)
@@ -20,12 +19,12 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    if (status === 'unauthenticated') {
+    if (!loading && !user) {
       router.push('/login')
-    } else if (status === 'authenticated') {
+    } else if (!loading && user) {
       fetchData()
     }
-  }, [status, router])
+  }, [user, loading, router])
 
   const fetchData = async () => {
     try {
@@ -46,7 +45,7 @@ export default function DashboardPage() {
     }
   }
 
-  if (status === 'loading' || isLoading) {
+  if (loading || isLoading) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>
   }
 
@@ -56,12 +55,12 @@ export default function DashboardPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold">¡Hola, {session?.user?.name || 'amigo'}!</h1>
+            <h1 className="text-3xl font-bold">¡Hola, {user?.email?.split('@')[0] || 'amigo'}!</h1>
             <p className="text-gray-600">Ready to practice some Mexican Spanish?</p>
           </div>
           <Button 
             variant="outline" 
-            onClick={() => signOut({ callbackUrl: '/login' })}
+            onClick={() => signOut()}
           >
             <LogOut className="h-4 w-4 mr-2" />
             Sign Out
@@ -167,8 +166,8 @@ export default function DashboardPage() {
                 <p className="text-sm font-medium">Chatty</p>
                 <p className="text-xs text-gray-600">10 conversations</p>
               </div>
-              <div className={`text-center p-4 rounded-lg ${progress?.totalMinutes && progress.totalMinutes >= 60 ? 'bg-yellow-50' : 'bg-gray-50'}`}>
-                <Trophy className={`h-8 w-8 mx-auto mb-2 ${progress?.totalMinutes && progress.totalMinutes >= 60 ? 'text-yellow-500' : 'text-gray-400'}`} />
+              <div className={`text-center p-4 rounded-lg ${progress?.total_minutes_practiced && progress.total_minutes_practiced >= 60 ? 'bg-yellow-50' : 'bg-gray-50'}`}>
+                <Trophy className={`h-8 w-8 mx-auto mb-2 ${progress?.total_minutes_practiced && progress.total_minutes_practiced >= 60 ? 'text-yellow-500' : 'text-gray-400'}`} />
                 <p className="text-sm font-medium">Hour Hero</p>
                 <p className="text-xs text-gray-600">60 minutes total</p>
               </div>
