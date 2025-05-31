@@ -90,6 +90,7 @@ export class OpenAIRealtimeService {
   private conversationHistory: Array<{role: 'user' | 'assistant', text: string, timestamp: Date}> = [];
   private summarizedContext: string = '';
   private speechStartTime: number | null = null;
+  private assistantSpeechStartTime: number | null = null;
   
   // Cost tracking
   private costTracking: CostTracking = {
@@ -589,6 +590,7 @@ export class OpenAIRealtimeService {
         console.log('[OpenAIRealtimeService] Assistant transcript:', event.transcript);
         this.addToConversationHistory('assistant', event.transcript);
         this.events.onTranscript?.('assistant', event.transcript);
+        // Audio duration will be tracked in response.done event via audio_tokens
         break;
         
       case 'response.audio_transcript.delta':
@@ -631,15 +633,40 @@ export class OpenAIRealtimeService {
         break;
         
       case 'response.done':
+        console.log('[OpenAIRealtimeService] Response done event:', event);
         // Update costs when response is complete
         if (event.response?.usage) {
-          // Use actual token counts if available
-          if (event.response.usage.input_tokens) {
-            this.costTracking.textInputTokens = event.response.usage.input_tokens;
+          const usage = event.response.usage;
+          
+          // Log full usage data for debugging
+          console.log('[OpenAIRealtimeService] Full usage data:', usage);
+          
+          // Track input audio tokens and calculate duration
+          if (usage.input_token_details?.audio_tokens) {
+            // OpenAI uses ~1667 audio tokens per second (from community findings)
+            const audioTokensPerSecond = 1667;
+            const inputAudioSeconds = usage.input_token_details.audio_tokens / audioTokensPerSecond;
+            console.log('[OpenAIRealtimeService] Input audio tokens:', usage.input_token_details.audio_tokens, '≈', inputAudioSeconds.toFixed(2), 'seconds');
+            this.costTracking.audioInputSeconds = inputAudioSeconds;
           }
-          if (event.response.usage.output_tokens) {
-            this.costTracking.textOutputTokens = event.response.usage.output_tokens;
+          
+          // Track output audio tokens and calculate duration
+          if (usage.output_token_details?.audio_tokens) {
+            // OpenAI uses ~1667 audio tokens per second
+            const audioTokensPerSecond = 1667;
+            const outputAudioSeconds = usage.output_token_details.audio_tokens / audioTokensPerSecond;
+            console.log('[OpenAIRealtimeService] Output audio tokens:', usage.output_token_details.audio_tokens, '≈', outputAudioSeconds.toFixed(2), 'seconds');
+            this.costTracking.audioOutputSeconds += outputAudioSeconds;
           }
+          
+          // Track text tokens
+          if (usage.input_token_details?.text_tokens) {
+            this.costTracking.textInputTokens = usage.input_token_details.text_tokens;
+          }
+          if (usage.output_token_details?.text_tokens) {
+            this.costTracking.textOutputTokens = usage.output_token_details.text_tokens;
+          }
+          
           this.calculateCosts();
         }
         break;

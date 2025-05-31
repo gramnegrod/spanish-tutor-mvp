@@ -1,0 +1,247 @@
+import { createClient } from '@supabase/supabase-js'
+import { ConversationTranscript } from '@/types'
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+
+// Types for our database tables
+export interface Conversation {
+  id: string
+  user_id: string
+  title: string
+  persona: string
+  transcript: ConversationTranscript[]
+  duration: number
+  analysis?: any
+  created_at: string
+  updated_at: string
+}
+
+export interface Progress {
+  id: string
+  user_id: string
+  vocabulary: string[]
+  pronunciation: number
+  grammar: number
+  fluency: number
+  cultural_knowledge: number
+  total_minutes_practiced: number
+  conversations_completed: number
+  created_at: string
+  updated_at: string
+}
+
+export interface UserAdaptations {
+  id: string
+  user_id: string
+  speaking_pace_preference: number
+  needs_visual_aids: boolean
+  common_errors: string[]
+  mastered_concepts: string[]
+  struggle_areas: string[]
+  learning_goals: string[]
+  created_at: string
+  updated_at: string
+}
+
+// Conversation operations
+export const conversationService = {
+  async create(data: {
+    user_id: string
+    title: string
+    persona: string
+    transcript: ConversationTranscript[]
+    duration: number
+  }) {
+    const { data: conversation, error } = await supabase
+      .from('conversations')
+      .insert(data)
+      .select()
+      .single()
+
+    if (error) throw error
+    return conversation as Conversation
+  },
+
+  async getByUserId(userId: string, limit = 10) {
+    const { data, error } = await supabase
+      .from('conversations')
+      .select()
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(limit)
+
+    if (error) throw error
+    return data as Conversation[]
+  },
+
+  async getById(id: string) {
+    const { data, error } = await supabase
+      .from('conversations')
+      .select()
+      .eq('id', id)
+      .single()
+
+    if (error) throw error
+    return data as Conversation
+  },
+
+  async updateAnalysis(id: string, analysis: any) {
+    const { data, error } = await supabase
+      .from('conversations')
+      .update({ analysis })
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) throw error
+    return data as Conversation
+  },
+
+  async delete(id: string) {
+    const { error } = await supabase
+      .from('conversations')
+      .delete()
+      .eq('id', id)
+
+    if (error) throw error
+  }
+}
+
+// Progress operations
+export const progressService = {
+  async getByUserId(userId: string) {
+    const { data, error } = await supabase
+      .from('progress')
+      .select()
+      .eq('user_id', userId)
+      .single()
+
+    if (error && error.code !== 'PGRST116') throw error // PGRST116 = no rows found
+    return data as Progress | null
+  },
+
+  async upsert(data: {
+    user_id: string
+    vocabulary?: string[]
+    pronunciation?: number
+    grammar?: number
+    fluency?: number
+    cultural_knowledge?: number
+    total_minutes_practiced?: number
+    conversations_completed?: number
+  }) {
+    const { data: progress, error } = await supabase
+      .from('progress')
+      .upsert(data, { onConflict: 'user_id' })
+      .select()
+      .single()
+
+    if (error) throw error
+    return progress as Progress
+  },
+
+  async incrementStats(userId: string, updates: {
+    minutes_practiced?: number
+    conversations_completed?: number
+    pronunciation_improvement?: number
+    grammar_improvement?: number
+    fluency_improvement?: number
+    cultural_improvement?: number
+  }) {
+    // Get current progress
+    const current = await this.getByUserId(userId)
+    
+    const updatedData = {
+      user_id: userId,
+      total_minutes_practiced: (current?.total_minutes_practiced || 0) + (updates.minutes_practiced || 0),
+      conversations_completed: (current?.conversations_completed || 0) + (updates.conversations_completed || 0),
+      pronunciation: Math.min(100, (current?.pronunciation || 0) + (updates.pronunciation_improvement || 0)),
+      grammar: Math.min(100, (current?.grammar || 0) + (updates.grammar_improvement || 0)),
+      fluency: Math.min(100, (current?.fluency || 0) + (updates.fluency_improvement || 0)),
+      cultural_knowledge: Math.min(100, (current?.cultural_knowledge || 0) + (updates.cultural_improvement || 0)),
+    }
+
+    return this.upsert(updatedData)
+  },
+
+  async addVocabulary(userId: string, words: string[]) {
+    const current = await this.getByUserId(userId)
+    const existingVocab = current?.vocabulary || []
+    const newVocab = [...new Set([...existingVocab, ...words])]
+
+    return this.upsert({
+      user_id: userId,
+      vocabulary: newVocab
+    })
+  }
+}
+
+// User adaptations operations
+export const adaptationsService = {
+  async getByUserId(userId: string) {
+    const { data, error } = await supabase
+      .from('user_adaptations')
+      .select()
+      .eq('user_id', userId)
+      .single()
+
+    if (error && error.code !== 'PGRST116') throw error
+    return data as UserAdaptations | null
+  },
+
+  async upsert(data: {
+    user_id: string
+    speaking_pace_preference?: number
+    needs_visual_aids?: boolean
+    common_errors?: string[]
+    mastered_concepts?: string[]
+    struggle_areas?: string[]
+    learning_goals?: string[]
+  }) {
+    const { data: adaptations, error } = await supabase
+      .from('user_adaptations')
+      .upsert(data, { onConflict: 'user_id' })
+      .select()
+      .single()
+
+    if (error) throw error
+    return adaptations as UserAdaptations
+  },
+
+  async addError(userId: string, error: string) {
+    const current = await this.getByUserId(userId)
+    const errors = [...(current?.common_errors || []), error]
+    
+    return this.upsert({
+      user_id: userId,
+      common_errors: errors
+    })
+  },
+
+  async addMasteredConcept(userId: string, concept: string) {
+    const current = await this.getByUserId(userId)
+    const concepts = [...new Set([...(current?.mastered_concepts || []), concept])]
+    
+    return this.upsert({
+      user_id: userId,
+      mastered_concepts: concepts
+    })
+  }
+}
+
+// Helper functions
+export const dbHelpers = {
+  async getCurrentUser() {
+    const { data: { user } } = await supabase.auth.getUser()
+    return user
+  },
+
+  async requireAuth() {
+    const user = await this.getCurrentUser()
+    if (!user) throw new Error('Authentication required')
+    return user
+  }
+}
