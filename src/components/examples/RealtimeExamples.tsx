@@ -92,7 +92,8 @@ export function CustomerServiceExample() {
   } = useOpenAIRealtime({
     instructions: 'You are a helpful customer service representative.',
     temperature: 0.7,
-    enableInputTranscription: true, // Show what user said
+    // Don't use input transcription - Whisper is bad for multilingual
+    enableInputTranscription: false,
     onTranscript: (role, text) => {
       console.log(`${role}: ${text}`);
     }

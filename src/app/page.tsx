@@ -17,6 +17,8 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen">
+      {/* Header - removed UserMenu for now */}
+      
       {/* Hero Section */}
       <div className="relative overflow-hidden">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16">
@@ -53,8 +55,13 @@ export default function HomePage() {
                 </>
               ) : (
                 <>
+                  <Link href="/practice-no-auth">
+                    <Button size="lg" className="w-full sm:w-auto bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600">
+                      Try it Free - No Account Needed
+                    </Button>
+                  </Link>
                   <Link href="/login">
-                    <Button size="lg" className="w-full sm:w-auto">
+                    <Button size="lg" variant="outline" className="w-full sm:w-auto">
                       Sign In
                     </Button>
                   </Link>
@@ -262,11 +269,18 @@ export default function HomePage() {
           <p className="text-xl mb-8 text-orange-100">
             Join thousands learning authentic conversational Spanish
           </p>
-          <Link href="/register">
-            <Button size="lg" variant="secondary" className="bg-white text-orange-600 hover:bg-gray-100">
-              Start Your Free Journey
-            </Button>
-          </Link>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Link href="/practice-no-auth">
+              <Button size="lg" variant="secondary" className="bg-white text-orange-600 hover:bg-gray-100">
+                Try it Free - No Sign Up
+              </Button>
+            </Link>
+            <Link href="/register">
+              <Button size="lg" variant="outline" className="border-white text-white hover:bg-white hover:text-orange-600">
+                Create Free Account
+              </Button>
+            </Link>
+          </div>
         </div>
       </div>
     </div>

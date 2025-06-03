@@ -142,6 +142,8 @@ export class OpenAIRealtimeService {
       ...config
     };
     this.events = events;
+    
+    console.log('[OpenAIRealtimeService] Constructor - enableInputTranscription:', this.config.enableInputTranscription);
   }
 
   async connect(audioElement?: HTMLAudioElement): Promise<void> {
@@ -262,11 +264,8 @@ export class OpenAIRealtimeService {
       await this.pc.setRemoteDescription(answer);
       console.log('[OpenAIRealtimeService] Remote description set');
       
-      this.updateStatus('Connected!');
-      console.log('[OpenAIRealtimeService] Successfully connected!');
-      this.startSessionTimers();
-      this.events.onConnect?.();
-      console.log('[OpenAIRealtimeService] onConnect event fired');
+      this.updateStatus('WebRTC connected, waiting for data channel...');
+      console.log('[OpenAIRealtimeService] WebRTC connection established, waiting for data channel...');
       
     } catch (error) {
       console.error('[OpenAIRealtimeService] Connection error:', error);
@@ -506,11 +505,24 @@ export class OpenAIRealtimeService {
     this.dc.onopen = () => {
       console.log('[OpenAIRealtimeService] Data channel opened!');
       this.configureSession();
+      
+      // Now we're truly connected - fire the onConnect event
+      this.updateStatus('Connected!');
+      console.log('[OpenAIRealtimeService] Successfully connected!');
+      this.startSessionTimers();
+      this.events.onConnect?.();
+      console.log('[OpenAIRealtimeService] onConnect event fired');
     };
     
     this.dc.onmessage = (e) => {
       const event = JSON.parse(e.data);
       console.log('[OpenAIRealtimeService] Received event:', event.type);
+      
+      // Log specific transcription-related events in detail
+      if (event.type.includes('transcription') || event.type.includes('transcript')) {
+        console.log('[OpenAIRealtimeService] Transcription event details:', event);
+      }
+      
       this.handleRealtimeEvent(event);
     };
     
@@ -550,9 +562,24 @@ export class OpenAIRealtimeService {
       sessionConfig.session.input_audio_transcription = {
         model: 'whisper-1'
       };
+      console.log('[OpenAIRealtimeService] Input transcription ENABLED with model:', sessionConfig.session.input_audio_transcription.model);
+    } else {
+      console.log('[OpenAIRealtimeService] Input transcription DISABLED');
     }
     
+    console.log('📤 [OpenAIRealtimeService] Sending session.update with instructions preview:', 
+      this.config.instructions?.substring(0, 100) + '...');
+    console.log('🛠️ [OpenAIRealtimeService] Full session config:', {
+      voice: sessionConfig.session.voice,
+      temperature: sessionConfig.session.temperature,
+      turnDetection: sessionConfig.session.turn_detection,
+      instructionsLength: sessionConfig.session.instructions.length,
+      inputTranscriptionEnabled: !!sessionConfig.session.input_audio_transcription,
+      inputTranscriptionModel: sessionConfig.session.input_audio_transcription?.model
+    });
+    console.log('[OpenAIRealtimeService] Full session config being sent:', JSON.stringify(sessionConfig, null, 2));
     this.dc.send(JSON.stringify(sessionConfig));
+    console.log('✅ [OpenAIRealtimeService] Session configuration sent successfully');
   }
 
   private handleRealtimeEvent(event: any): void {
@@ -578,12 +605,26 @@ export class OpenAIRealtimeService {
         break;
         
       case 'conversation.item.input_audio_transcription.completed':
+        console.log('[OpenAIRealtimeService] User transcript completed:', event.transcript);
+        // Ignore empty transcripts
+        if (!event.transcript || event.transcript.trim() === '') {
+          console.log('[OpenAIRealtimeService] Ignoring empty transcript');
+          break;
+        }
         // Track user speech when transcription is completed
         this.events.onTranscript?.('user', event.transcript);
         // Also attempt to track audio duration from transcript timing
         if (event.duration_ms) {
           this.trackAudioDuration('input', event.duration_ms);
         }
+        break;
+        
+      case 'conversation.item.input_audio_transcription.in_progress':
+        console.log('[OpenAIRealtimeService] User transcript in progress:', event);
+        break;
+        
+      case 'conversation.item.input_audio_transcription.failed':
+        console.log('[OpenAIRealtimeService] User transcript failed:', event);
         break;
         
       case 'response.audio_transcript.done':
@@ -708,9 +749,22 @@ export class OpenAIRealtimeService {
   }
   
   updateInstructions(instructions: string): void {
+    console.log('🔄 [OpenAIRealtimeService] updateInstructions called');
+    console.log('📝 [OpenAIRealtimeService] Previous instructions length:', this.config.instructions?.length || 0);
+    console.log('📝 [OpenAIRealtimeService] New instructions length:', instructions.length);
+    console.log('🔌 [OpenAIRealtimeService] Data channel state:', this.dc?.readyState);
+    
+    // Log first 200 chars of old and new instructions to compare
+    console.log('🔗 [OpenAI] OLD INSTRUCTIONS:', this.config.instructions?.substring(0, 200) + '...');
+    console.log('🆕 [OpenAI] NEW INSTRUCTIONS:', instructions.substring(0, 200) + '...');
+    
     this.config.instructions = instructions;
     if (this.dc && this.dc.readyState === 'open') {
+      console.log('✅ [OpenAIRealtimeService] Sending updated session config to OpenAI...');
       this.configureSession();
+      console.log('✨ [OpenAIRealtimeService] Instructions successfully updated!');
+    } else {
+      console.warn('❌ [OpenAIRealtimeService] Cannot update instructions - data channel not open:', this.dc?.readyState);
     }
   }
   

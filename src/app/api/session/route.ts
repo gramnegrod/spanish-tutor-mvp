@@ -2,16 +2,19 @@ import { NextResponse } from 'next/server'
 
 export async function GET() {
   try {
-    // TEMPORARY: Hardcode the API key to get it working
-    // TODO: Fix environment variable loading in Next.js 15.1.5
-    const apiKey = '***REMOVED***';
+    const apiKey = process.env.OPENAI_API_KEY || process.env.NEXT_PUBLIC_OPENAI_API_KEY;
     
-    console.log('Session API - Using hardcoded key temporarily');
+    console.log('Session API - Environment check:', {
+      hasApiKey: !!apiKey,
+      keyLength: apiKey?.length,
+      allEnvKeys: Object.keys(process.env).filter(k => k.includes('OPENAI'))
+    });
     
     if (!apiKey) {
-      console.error('No OpenAI API key found');
+      console.error('No OpenAI API key found in environment variables');
+      console.error('Available environment variables:', Object.keys(process.env).slice(0, 10));
       return NextResponse.json(
-        { error: 'OpenAI API key not configured' },
+        { error: 'OpenAI API key not configured. Please set OPENAI_API_KEY environment variable.' },
         { status: 500 }
       )
     }

@@ -6,7 +6,7 @@
 import { LearnerProfile } from '@/lib/pedagogical-system';
 import { ConversationTranscript } from '@/types';
 import { GuestStorageService, GuestConversation, GuestProgress } from '@/lib/guest-storage';
-import { conversationService, progressService, adaptationsService } from '@/lib/supabase-db';
+// Note: Using API routes instead of direct database service calls for client-side compatibility
 
 interface User {
   id: string;
@@ -18,13 +18,16 @@ export class UnifiedStorageService {
   // Learner Profile Methods
   static async saveLearnerProfile(profile: LearnerProfile, user?: User | null): Promise<void> {
     if (user) {
-      // Authenticated user - save to Supabase
+      // Authenticated user - save to Supabase via API
       try {
-        await adaptationsService.upsert({
-          user_id: user.id,
-          common_errors: profile.strugglingWords,
-          mastered_concepts: profile.masteredPhrases,
-          struggle_areas: profile.needsMoreEnglish ? ['comprehension'] : []
+        await fetch('/api/adaptations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            common_errors: profile.strugglingWords,
+            mastered_concepts: profile.masteredPhrases,
+            struggle_areas: profile.needsMoreEnglish ? ['comprehension'] : []
+          })
         });
       } catch (error) {
         console.error('[UnifiedStorage] Failed to save learner profile to Supabase:', error);
@@ -39,17 +42,20 @@ export class UnifiedStorageService {
   
   static async getLearnerProfile(user?: User | null): Promise<LearnerProfile | null> {
     if (user) {
-      // Authenticated user - load from Supabase
+      // Authenticated user - load from Supabase via API
       try {
-        const adaptations = await adaptationsService.getByUserId(user.id);
-        if (adaptations) {
-          return {
-            level: 'beginner', // TODO: Determine from data
-            comfortWithSlang: false,
-            needsMoreEnglish: adaptations.common_errors.length > 3,
-            strugglingWords: adaptations.common_errors,
-            masteredPhrases: adaptations.mastered_concepts
-          };
+        const response = await fetch('/api/adaptations');
+        if (response.ok) {
+          const { adaptations } = await response.json();
+          if (adaptations) {
+            return {
+              level: 'beginner', // TODO: Determine from data
+              comfortWithSlang: false,
+              needsMoreEnglish: adaptations.common_errors.length > 3,
+              strugglingWords: adaptations.common_errors,
+              masteredPhrases: adaptations.mastered_concepts
+            };
+          }
         }
       } catch (error) {
         console.error('[UnifiedStorage] Failed to load learner profile from Supabase:', error);
@@ -71,14 +77,17 @@ export class UnifiedStorageService {
     user?: User | null
   ): Promise<void> {
     if (user) {
-      // Authenticated user - save to Supabase
+      // Authenticated user - save to Supabase via API
       try {
-        await conversationService.create({
-          user_id: user.id,
-          title: conversation.title,
-          persona: conversation.persona as any,
-          transcript: conversation.transcript,
-          duration: conversation.duration
+        await fetch('/api/conversations/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: conversation.title,
+            persona: conversation.persona,
+            transcript: conversation.transcript,
+            duration: conversation.duration
+          })
         });
       } catch (error) {
         console.error('[UnifiedStorage] Failed to save conversation to Supabase:', error);
@@ -118,22 +127,20 @@ export class UnifiedStorageService {
     user?: User | null
   ): Promise<void> {
     if (user) {
-      // Authenticated user - update Supabase
+      // Authenticated user - update Supabase via API
       try {
-        if (update.minutes_practiced || update.conversations_completed) {
-          await progressService.incrementStats(user.id, {
-            minutes_practiced: update.minutes_practiced || 0,
-            conversations_completed: update.conversations_completed || 0,
-            pronunciation_improvement: 1,
-            grammar_improvement: 1,
-            fluency_improvement: 1,
-            cultural_improvement: 1
-          });
-        }
-        
-        if (update.vocabulary && update.vocabulary.length > 0) {
-          await progressService.addVocabulary(user.id, update.vocabulary);
-        }
+        await fetch('/api/progress', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            vocabulary: update.vocabulary || [],
+            minutesPracticed: update.minutes_practiced || 0,
+            pronunciationImprovement: 1,
+            grammarImprovement: 1,
+            fluencyImprovement: 1,
+            culturalImprovement: 1
+          })
+        });
       } catch (error) {
         console.error('[UnifiedStorage] Failed to update progress in Supabase:', error);
         // Fallback to localStorage

@@ -5,18 +5,24 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOpenAIRealtime } from '@/hooks/useOpenAIRealtime';
 import { AudioRecorder, isAudioRecordingSupported } from '@/utils/audio-recorder';
-import { ConversationAnalysisService } from '@/services/conversation-analysis';
+import { ConversationAnalysisService, ConversationAnalysis } from '@/services/conversation-analysis';
+import { ConversationUI } from '@/components/audio/ConversationUI';
+import { ConversationTranscript } from '@/types';
+import { AuthHeader } from '@/components/layout/AuthHeader';
+import { UserSettingsForm } from '@/components/practice/UserSettingsForm';
+import { ScenarioPreview } from '@/components/practice/ScenarioPreview';
+import { ConversationResults } from '@/components/practice/ConversationResults';
 import { 
   LearningScenario, 
   UserAdaptations, 
-  UserSettings,
-  ConversationAnalysis 
+  UserSettings
 } from '@/types/adaptive-learning';
 import { 
   learningScenarios, 
   getScenarioById, 
   personalizeSystemPrompt 
 } from '@/config/learning-scenarios';
+import { apiClient } from '@/lib/api-client';
 
 type PageState = 'loading' | 'settings' | 'pre-conversation' | 'conversation' | 'analyzing' | 'results';
 
@@ -43,10 +49,12 @@ export default function AdaptivePracticePage() {
   const [conversationStartTime, setConversationStartTime] = useState<number>(0);
   const [recordingError, setRecordingError] = useState<string>('');
   const [analysisResults, setAnalysisResults] = useState<ConversationAnalysis | null>(null);
+  const [transcripts, setTranscripts] = useState<ConversationTranscript[]>([]);
+  const [currentSpeaker, setCurrentSpeaker] = useState<'user' | 'assistant' | null>(null);
   
-  // OpenAI Realtime hook
-  const realtimeConfig = currentScenario ? {
-    instructions: personalizeSystemPrompt(
+  // OpenAI Realtime hook - always provide config with onTranscript
+  const realtimeConfig = {
+    instructions: currentScenario ? personalizeSystemPrompt(
       currentScenario.system_prompt_template,
       {
         speaking_pace: userSettings.speech_settings.speaking_speed === 'slow' ? 0.8 : 
@@ -56,10 +64,32 @@ export default function AdaptivePracticePage() {
         struggle_areas: userAdaptations?.struggle_areas || [],
         mastered_concepts: userAdaptations?.mastered_concepts || []
       }
-    ),
+    ) : 'You are a helpful Spanish tutor. Please help the student practice their Spanish.',
     voice: 'alloy' as const,
-    temperature: 0.7
-  } : undefined;
+    temperature: 0.7,
+    // Don't use input transcription - Whisper is bad for multilingual
+    // The AI understands audio perfectly without transcription
+    enableInputTranscription: false,
+    onTranscript: (role: string, text: string) => {
+      console.log('[AdaptivePractice] Transcript received:', { role, text, transcriptsLength: transcripts.length });
+      if (!text || text.trim() === '') {
+        console.warn('[AdaptivePractice] Empty transcript received');
+        return;
+      }
+      setTranscripts(prev => {
+        const newTranscripts = [...prev, {
+          id: crypto.randomUUID(),
+          speaker: role as 'user' | 'assistant',
+          text,
+          timestamp: new Date()
+        }];
+        console.log('[AdaptivePractice] Updated transcripts:', newTranscripts.length);
+        return newTranscripts;
+      });
+      setCurrentSpeaker(role as 'user' | 'assistant');
+      setTimeout(() => setCurrentSpeaker(null), 1000);
+    }
+  };
   
   const {
     connect,
@@ -68,8 +98,9 @@ export default function AdaptivePracticePage() {
     costs,
     showTimeWarning,
     extendSession,
-    sessionInfo
-  } = useOpenAIRealtime(realtimeConfig || {});
+    sessionInfo,
+    audioRef
+  } = useOpenAIRealtime(realtimeConfig);
   
   // Load user data on mount
   useEffect(() => {
@@ -92,32 +123,73 @@ export default function AdaptivePracticePage() {
   // TODO: Implement message tracking when we add transcript support
   
   async function loadUserData() {
+    if (!user) return;
+    
     try {
-      // TODO: Load from Supabase
-      // For now, use mock data
-      const mockAdaptations: UserAdaptations = {
-        user_id: user!.id,
-        speaking_pace_preference: 0.9,
-        needs_visual_aids: false,
-        common_errors: [],
-        mastered_concepts: [],
-        struggle_areas: []
-      };
+      // Load user adaptations from database
+      console.log('[AdaptivePractice] Loading user adaptations...');
+      const { adaptations } = await apiClient.getAdaptations();
       
-      setUserAdaptations(mockAdaptations);
-      
-      // Check if returning user or first time
-      const hasCompletedOnboarding = false; // TODO: Check from DB
-      
-      if (hasCompletedOnboarding) {
-        // Load their current scenario
-        const savedScenarioId = 'travel_agency_booking'; // TODO: From DB
-        const scenario = getScenarioById(savedScenarioId);
-        setCurrentScenario(scenario || learningScenarios[0]);
-        setPageState('pre-conversation');
+      if (adaptations) {
+        setUserAdaptations({
+          user_id: user.id,
+          speaking_pace_preference: 1.0, // Default normal speed
+          needs_visual_aids: false, // Default false
+          common_errors: adaptations.common_errors || [],
+          struggle_areas: adaptations.struggle_areas || [],
+          mastered_concepts: adaptations.mastered_concepts || []
+        });
+        
+        // Infer competency level from mastered concepts
+        if (adaptations.mastered_concepts.length > 20) {
+          setUserSettings(prev => ({ ...prev, competency_level: 'advanced' }));
+        } else if (adaptations.mastered_concepts.length > 10) {
+          setUserSettings(prev => ({ ...prev, competency_level: 'intermediate' }));
+        }
       } else {
-        setPageState('settings');
+        // First time user
+        const defaultAdaptations: UserAdaptations = {
+          user_id: user.id,
+          speaking_pace_preference: 1.0, // Default normal speed
+          needs_visual_aids: false, // Default false
+          common_errors: [],
+          struggle_areas: [],
+          mastered_concepts: []
+        };
+        setUserAdaptations(defaultAdaptations);
       }
+      
+      // Load user progress to show stats
+      const progressResponse = await fetch('/api/progress');
+      const { progress } = await progressResponse.json();
+      if (progress) {
+        console.log('[AdaptivePractice] User progress:', {
+          totalConversations: progress.conversations_completed,
+          totalMinutes: progress.total_minutes_practiced,
+          pronunciation: progress.pronunciation,
+          grammar: progress.grammar,
+          fluency: progress.fluency,
+          vocabulary: progress.vocabulary?.length || 0
+        });
+        
+        // Check if user has used adaptive practice before (not just any practice)
+        // For now, always show settings first to let user configure
+        // TODO: Add a flag to track if user has completed adaptive practice onboarding
+        console.log('[AdaptivePractice] User has', progress.conversations_completed, 'total conversations');
+        
+        // Uncomment below to skip settings for returning users
+        // if (progress.conversations_completed > 5) {
+        //   const level = progress.fluency > 70 ? 'advanced' : 
+        //                progress.fluency > 40 ? 'intermediate' : 'beginner';
+        //   const scenario = learningScenarios.find(s => s.difficulty === level) || learningScenarios[0];
+        //   setCurrentScenario(scenario);
+        //   setPageState('pre-conversation');
+        //   return;
+        // }
+      }
+      
+      // New user - show settings
+      setPageState('settings');
     } catch (error) {
       console.error('Error loading user data:', error);
       setPageState('settings');
@@ -147,6 +219,7 @@ export default function AdaptivePracticePage() {
     analysisService.current = new ConversationAnalysisService();
     
     setConversationStartTime(Date.now());
+    setTranscripts([]); // Clear previous transcripts
     setPageState('conversation');
     
     await connect();
@@ -162,13 +235,16 @@ export default function AdaptivePracticePage() {
       // Stop recording and get audio
       const audioBlob = await audioRecorder.current.stopRecording();
       
-      // Perform analysis (using dummy transcripts for now since we don't have real-time transcription)
-      const dummyTranscripts = [
-        { id: '1', speaker: 'user' as const, text: 'Hola, ¿cómo estás?', timestamp: new Date() },
-        { id: '2', speaker: 'assistant' as const, text: 'Muy bien, gracias. ¿Y tú?', timestamp: new Date() }
-      ];
+      // Use real transcripts from the conversation
+      if (transcripts.length === 0) {
+        console.warn('[AdaptivePractice] No transcripts captured');
+        setPageState('results');
+        return;
+      }
+      
+      // Perform analysis with real transcripts
       const analysis = await analysisService.current!.analyzeConversation(
-        dummyTranscripts,
+        transcripts,
         userSettings.competency_level,
         currentScenario!.goals.map(g => g.description)
       );
@@ -176,7 +252,7 @@ export default function AdaptivePracticePage() {
       // Type assertion to handle conflicting ConversationAnalysis interfaces
       setAnalysisResults(analysis as any);
       
-      // TODO: Save to database
+      // Save to database
       await saveConversationResults(analysis as any, audioBlob);
       
       setPageState('results');
@@ -188,12 +264,81 @@ export default function AdaptivePracticePage() {
   }
   
   async function saveConversationResults(analysis: ConversationAnalysis, audioBlob: Blob) {
-    // TODO: Implement actual database save
-    console.log('Saving conversation results:', {
-      duration: Date.now() - conversationStartTime,
-      analysis,
-      audioSize: audioBlob.size
+    if (!user) {
+      console.error('[AdaptivePractice] No user to save results for');
+      return;
+    }
+    
+    const duration = Math.floor((Date.now() - conversationStartTime) / 1000);
+    
+    try {
+      // Save conversation to database
+      console.log('[AdaptivePractice] Saving conversation to database...');
+      const { conversation } = await apiClient.saveConversation({
+        title: `${currentScenario?.title || 'Practice'} - ${new Date().toLocaleString()}`,
+        persona: currentScenario?.context.role_ai || 'Spanish Tutor',
+        transcript: transcripts,
+        duration
+      });
+      
+      // Save analysis to conversation
+      await apiClient.updateConversationAnalysis(conversation.id, analysis);
+      
+      // Extract vocabulary for progress tracking
+      const vocabulary = extractVocabularyFromTranscripts(transcripts);
+      
+      // Update user progress
+      console.log('[AdaptivePractice] Updating user progress...');
+      await apiClient.updateProgress({
+        vocabulary,
+        minutesPracticed: Math.ceil(duration / 60),
+        pronunciationImprovement: analysis.quality_assessment?.engagement > 0.7 ? 2 : 1,
+        grammarImprovement: analysis.mistakes?.length < 3 ? 2 : 1,
+        fluencyImprovement: analysis.conversation_metrics?.wordsPerMinute > 60 ? 2 : 1,
+        culturalImprovement: analysis.cultural_notes?.length > 0 ? 2 : 1
+      });
+      
+      // Update user adaptations based on analysis
+      console.log('[AdaptivePractice] Updating user adaptations...');
+      
+      // mistakes is string[] in ConversationAnalysisService
+      const extractedErrors = analysis.mistakes || [];
+      
+      const newAdaptations = {
+        user_id: user.id,
+        common_errors: extractedErrors,
+        mastered_concepts: analysis.wins || [],
+        struggle_areas: analysis.recommendations || []
+      };
+      
+      await apiClient.updateAdaptations({
+        common_errors: newAdaptations.common_errors,
+        mastered_concepts: newAdaptations.mastered_concepts,
+        struggle_areas: newAdaptations.struggle_areas
+      });
+      
+      console.log('[AdaptivePractice] Successfully saved all data to database');
+    } catch (error) {
+      console.error('[AdaptivePractice] Failed to save conversation results:', error);
+    }
+  }
+  
+  function extractVocabularyFromTranscripts(transcripts: ConversationTranscript[]): string[] {
+    const vocabulary = new Set<string>();
+    
+    // Extract Spanish words from AI responses
+    transcripts.forEach(t => {
+      if (t.speaker === 'assistant') {
+        const words = t.text.toLowerCase()
+          .split(/\s+/)
+          .filter(word => word.length > 3)
+          .map(word => word.replace(/[.,!?¿¡]/g, ''));
+        
+        words.forEach(word => vocabulary.add(word));
+      }
     });
+    
+    return Array.from(vocabulary).slice(0, 20); // Limit to 20 new words
   }
   
   function handleSaveSettings() {
@@ -237,92 +382,15 @@ export default function AdaptivePracticePage() {
   
   if (pageState === 'settings') {
     return (
-      <div className="min-h-screen bg-gray-900 p-4">
-        <div className="max-w-2xl mx-auto">
-          <button
-            onClick={() => router.push('/')}
-            className="mb-4 text-gray-400 hover:text-white"
-          >
-            ← Back
-          </button>
-          
-          <div className="bg-gray-800 rounded-lg p-6">
-            <h1 className="text-2xl font-bold text-white mb-6">
-              Welcome to Adaptive Learning!
-            </h1>
-            
-            <p className="text-gray-300 mb-6">
-              Let's customize your learning experience. These settings help us adapt to your needs.
-            </p>
-            
-            <div className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  What's your current Spanish level?
-                </label>
-                <select
-                  value={userSettings.competency_level}
-                  onChange={(e) => setUserSettings({
-                    ...userSettings,
-                    competency_level: e.target.value as any
-                  })}
-                  className="w-full px-3 py-2 bg-gray-700 text-white rounded"
-                >
-                  <option value="beginner">Beginner - I know basic phrases</option>
-                  <option value="intermediate">Intermediate - I can have simple conversations</option>
-                  <option value="advanced">Advanced - I'm comfortable in most situations</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  How fast should the AI speak?
-                </label>
-                <select
-                  value={userSettings.speech_settings.speaking_speed}
-                  onChange={(e) => setUserSettings({
-                    ...userSettings,
-                    speech_settings: {
-                      ...userSettings.speech_settings,
-                      speaking_speed: e.target.value as any
-                    }
-                  })}
-                  className="w-full px-3 py-2 bg-gray-700 text-white rounded"
-                >
-                  <option value="slow">Slow - Give me time to process</option>
-                  <option value="normal">Normal - Natural pace</option>
-                  <option value="fast">Fast - Challenge me!</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Pause duration between sentences (seconds)
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  max="5"
-                  step="0.5"
-                  value={userSettings.speech_settings.pause_duration}
-                  onChange={(e) => setUserSettings({
-                    ...userSettings,
-                    speech_settings: {
-                      ...userSettings.speech_settings,
-                      pause_duration: parseFloat(e.target.value)
-                    }
-                  })}
-                  className="w-full px-3 py-2 bg-gray-700 text-white rounded"
-                />
-              </div>
-            </div>
-            
-            <button
-              onClick={handleSaveSettings}
-              className="mt-8 w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-            >
-              Start Learning
-            </button>
+      <div className="min-h-screen bg-gray-900">
+        <AuthHeader />
+        <div className="p-4">
+          <div className="max-w-2xl mx-auto">
+            <UserSettingsForm
+              userSettings={userSettings}
+              onSettingsChange={setUserSettings}
+              onSave={handleSaveSettings}
+            />
           </div>
         </div>
       </div>
@@ -331,83 +399,15 @@ export default function AdaptivePracticePage() {
   
   if (pageState === 'pre-conversation' && currentScenario) {
     return (
-      <div className="min-h-screen bg-gray-900 p-4">
-        <div className="max-w-2xl mx-auto">
-          <button
-            onClick={() => router.push('/')}
-            className="mb-4 text-gray-400 hover:text-white"
-          >
-            ← Back
-          </button>
-          
-          <div className="bg-gray-800 rounded-lg p-6">
-            <h1 className="text-2xl font-bold text-white mb-2">
-              {currentScenario.title}
-            </h1>
-            
-            <p className="text-gray-300 mb-6">
-              {currentScenario.description}
-            </p>
-            
-            <div className="mb-6 p-4 bg-gray-700 rounded">
-              <h3 className="font-semibold text-white mb-2">Your Goals:</h3>
-              <ul className="space-y-2">
-                {currentScenario.goals.filter(g => g.required).map(goal => (
-                  <li key={goal.id} className="text-gray-300 flex items-start">
-                    <span className="text-green-400 mr-2">✓</span>
-                    {goal.description}
-                  </li>
-                ))}
-              </ul>
-              {currentScenario.goals.some(g => !g.required) && (
-                <>
-                  <h4 className="font-semibold text-white mt-3 mb-1">Bonus Goals:</h4>
-                  <ul className="space-y-1">
-                    {currentScenario.goals.filter(g => !g.required).map(goal => (
-                      <li key={goal.id} className="text-gray-400 flex items-start text-sm">
-                        <span className="text-yellow-400 mr-2">★</span>
-                        {goal.description}
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              )}
-            </div>
-            
-            <div className="mb-6 p-4 bg-blue-900/30 rounded">
-              <h3 className="font-semibold text-blue-300 mb-2">Context:</h3>
-              <p className="text-gray-300 text-sm mb-2">
-                <strong>Setting:</strong> {currentScenario.context.setting}
-              </p>
-              <p className="text-gray-300 text-sm mb-2">
-                <strong>Your role:</strong> {currentScenario.context.role_student}
-              </p>
-              <p className="text-gray-300 text-sm">
-                <strong>AI's role:</strong> {currentScenario.context.role_ai}
-              </p>
-            </div>
-            
-            <div className="mb-6 p-4 bg-yellow-900/20 rounded">
-              <h3 className="font-semibold text-yellow-300 mb-2">Cultural Tips:</h3>
-              <ul className="space-y-1">
-                {currentScenario.context.cultural_notes?.map((note, i) => (
-                  <li key={i} className="text-gray-300 text-sm">• {note}</li>
-                ))}
-              </ul>
-            </div>
-            
-            {recordingError && (
-              <div className="mb-4 p-3 bg-red-900/50 rounded text-red-300 text-sm">
-                {recordingError}
-              </div>
-            )}
-            
-            <button
-              onClick={handleStartConversation}
-              className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700"
-            >
-              Start Conversation
-            </button>
+      <div className="min-h-screen bg-gray-900">
+        <AuthHeader />
+        <div className="p-4">
+          <div className="max-w-2xl mx-auto">
+            <ScenarioPreview
+              scenario={currentScenario}
+              recordingError={recordingError}
+              onStartConversation={handleStartConversation}
+            />
           </div>
         </div>
       </div>
@@ -416,8 +416,11 @@ export default function AdaptivePracticePage() {
   
   if (pageState === 'conversation') {
     return (
-      <div className="min-h-screen bg-gray-900 p-4">
-        <div className="max-w-2xl mx-auto">
+      <div className="min-h-screen bg-gray-900">
+        <AuthHeader />
+        <div className="p-4">
+          <div className="max-w-2xl mx-auto">
+          
           <div className="bg-gray-800 rounded-lg p-6">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold text-white">
@@ -433,14 +436,33 @@ export default function AdaptivePracticePage() {
               </div>
             </div>
             
-            <div className="mb-4 h-96 overflow-y-auto bg-gray-700 rounded p-4">
-              <div className="text-gray-400 text-center">
-                {isConnected ? 'Start speaking to begin the conversation...' : 'Connecting...'}
-              </div>
-              {/* TODO: Add message display when we implement transcript tracking */}
+            <div className="mb-4">
+              {transcripts.length === 0 ? (
+                <div className="h-96 overflow-y-auto bg-gray-700 rounded p-4">
+                  <div className="text-gray-400 text-center">
+                    {isConnected ? 'Start speaking to begin the conversation...' : 'Connecting...'}
+                  </div>
+                </div>
+              ) : (
+                <ConversationUI 
+                  transcripts={transcripts}
+                  currentSpeaker={currentSpeaker}
+                  isProcessing={false}
+                />
+              )}
             </div>
             
-            {/* TODO: Add speaking indicator */}
+            {/* Hidden audio element for voice playback */}
+            <audio ref={audioRef} autoPlay hidden />
+            
+            {/* Speaking indicator */}
+            {currentSpeaker && (
+              <div className="mb-4 text-center">
+                <span className="text-sm text-gray-400">
+                  {currentSpeaker === 'user' ? 'You are speaking...' : 'AI is responding...'}
+                </span>
+              </div>
+            )}
             
             <button
               onClick={handleEndConversation}
@@ -448,6 +470,7 @@ export default function AdaptivePracticePage() {
             >
               End Conversation
             </button>
+          </div>
           </div>
         </div>
         
@@ -495,93 +518,15 @@ export default function AdaptivePracticePage() {
   
   if (pageState === 'results') {
     return (
-      <div className="min-h-screen bg-gray-900 p-4">
-        <div className="max-w-2xl mx-auto">
-          <button
-            onClick={() => router.push('/')}
-            className="mb-4 text-gray-400 hover:text-white"
-          >
-            ← Back to Dashboard
-          </button>
-          
-          <div className="bg-gray-800 rounded-lg p-6">
-            <h1 className="text-2xl font-bold text-white mb-6">
-              Conversation Results
-            </h1>
-            
-            {analysisResults ? (
-              <>
-                <div className="mb-6 p-4 bg-green-900/30 rounded">
-                  <h3 className="font-semibold text-green-300 mb-2">What You Did Well:</h3>
-                  <ul className="space-y-1">
-                    {(analysisResults.wins || []).map((win, i) => (
-                      <li key={i} className="text-gray-300">✓ {win}</li>
-                    ))}
-                  </ul>
-                </div>
-                
-                {analysisResults.mistakes && analysisResults.mistakes.length > 0 && (
-                  <div className="mb-6 p-4 bg-yellow-900/30 rounded">
-                    <h3 className="font-semibold text-yellow-300 mb-2">Areas to Improve:</h3>
-                    <ul className="space-y-2">
-                      {analysisResults.mistakes.map((mistake, i) => (
-                        <li key={i} className="text-gray-300">
-                          <span className="text-yellow-400">→</span> {mistake}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                
-                <div className="mb-6 p-4 bg-blue-900/30 rounded">
-                  <h3 className="font-semibold text-blue-300 mb-2">Comprehension Score:</h3>
-                  <div className="flex items-center">
-                    <div className="flex-1 bg-gray-700 rounded-full h-4 mr-4">
-                      <div 
-                        className="bg-blue-500 h-4 rounded-full"
-                        style={{ 
-                          width: `${analysisResults.quality_assessment?.completeness ? 
-                                    analysisResults.quality_assessment.completeness * 100 : 50}%` 
-                        }}
-                      />
-                    </div>
-                    <span className="text-white">
-                      {Math.round((analysisResults.quality_assessment?.completeness || 0.5) * 100)}%
-                    </span>
-                  </div>
-                </div>
-                
-                {analysisResults.recommendations.length > 0 && (
-                  <div className="mb-6 p-4 bg-purple-900/30 rounded">
-                    <h3 className="font-semibold text-purple-300 mb-2">Recommendations:</h3>
-                    <ul className="space-y-1">
-                      {analysisResults.recommendations.map((rec, i) => (
-                        <li key={i} className="text-gray-300">• {rec}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="text-gray-400 text-center py-8">
-                Analysis results unavailable. Your conversation was still recorded for future review.
-              </div>
-            )}
-            
-            <div className="flex gap-4 mt-8">
-              <button
-                onClick={handleTryAgain}
-                className="flex-1 px-4 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
-              >
-                Try Again
-              </button>
-              <button
-                onClick={handleNextScenario}
-                className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-              >
-                Next Scenario
-              </button>
-            </div>
+      <div className="min-h-screen bg-gray-900">
+        <AuthHeader />
+        <div className="p-4">
+          <div className="max-w-2xl mx-auto">
+            <ConversationResults
+              analysisResults={analysisResults}
+              onTryAgain={handleTryAgain}
+              onNextScenario={handleNextScenario}
+            />
           </div>
         </div>
       </div>

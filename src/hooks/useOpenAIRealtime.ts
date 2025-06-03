@@ -87,7 +87,7 @@ export function useOpenAIRealtime(options: UseOpenAIRealtimeOptions = {}): UseOp
         setStatus('Disconnected');
       },
       onError: (err) => {
-        setError(err);
+        setError(err instanceof Error ? err : new Error(String(err)));
         setIsConnecting(false);
         setStatus(`Error: ${err.message}`);
         options.onError?.(err);
@@ -129,6 +129,10 @@ export function useOpenAIRealtime(options: UseOpenAIRealtimeOptions = {}): UseOp
       onStatusUpdate: setStatus
     };
     
+    console.log('[useOpenAIRealtime] Creating service with options:', {
+      ...options,
+      instructions: options.instructions ? options.instructions.substring(0, 50) + '...' : undefined
+    });
     serviceRef.current = new OpenAIRealtimeService(options, events);
     
     return () => {
@@ -149,6 +153,8 @@ export function useOpenAIRealtime(options: UseOpenAIRealtimeOptions = {}): UseOp
     try {
       await serviceRef.current.connect(audioRef.current || undefined);
     } catch (err) {
+      setIsConnecting(false);
+      setError(err instanceof Error ? err : new Error(String(err)));
       // Error handling is done in the service events
     }
   }, [isConnected, isConnecting]);
@@ -159,8 +165,18 @@ export function useOpenAIRealtime(options: UseOpenAIRealtimeOptions = {}): UseOp
   }, []);
   
   const updateInstructions = useCallback((instructions: string) => {
-    if (!serviceRef.current) return;
+    console.log('🔄 [useOpenAIRealtime] updateInstructions called');
+    console.log('📝 [useOpenAIRealtime] Instructions length:', instructions.length);
+    console.log('🔗 [useOpenAIRealtime] Service available:', !!serviceRef.current);
+    
+    if (!serviceRef.current) {
+      console.error('❌ [useOpenAIRealtime] No service available for updateInstructions');
+      return;
+    }
+    
+    console.log('✅ [useOpenAIRealtime] Calling service.updateInstructions...');
     serviceRef.current.updateInstructions(instructions);
+    console.log('✨ [useOpenAIRealtime] updateInstructions call completed');
   }, []);
   
   const extendSession = useCallback(() => {

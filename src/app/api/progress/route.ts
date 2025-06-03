@@ -1,16 +1,20 @@
 import { NextResponse } from 'next/server'
 import { progressService, dbHelpers } from '@/lib/supabase-db'
+import { createClient } from '@/utils/supabase/server'
 
 export async function GET(request: Request) {
   try {
+    // Create server client with proper cookie handling
+    const supabase = await createClient()
+    
     // Get authenticated user
-    const user = await dbHelpers.getCurrentUser()
+    const user = await dbHelpers.getCurrentUser(supabase)
     if (!user) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
     }
 
     // Get progress for the authenticated user
-    const progress = await progressService.getByUserId(user.id)
+    const progress = await progressService.getByUserId(supabase, user.id)
     
     // Calculate streak (simplified for now)
     const streak = progress?.conversations_completed || 0
@@ -44,8 +48,11 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    // Create server client with proper cookie handling
+    const supabase = await createClient()
+    
     // Get authenticated user
-    const user = await dbHelpers.getCurrentUser()
+    const user = await dbHelpers.getCurrentUser(supabase)
     if (!user) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
     }
@@ -61,7 +68,7 @@ export async function POST(request: Request) {
     } = body
 
     // Update progress using increment function
-    const progress = await progressService.incrementStats(user.id, {
+    const progress = await progressService.incrementStats(supabase, user.id, {
       minutes_practiced: minutesPracticed || 0,
       conversations_completed: 1,
       pronunciation_improvement: pronunciationImprovement || 0,
@@ -72,7 +79,7 @@ export async function POST(request: Request) {
 
     // Add vocabulary if provided
     if (vocabulary && vocabulary.length > 0) {
-      await progressService.addVocabulary(user.id, vocabulary)
+      await progressService.addVocabulary(supabase, user.id, vocabulary)
     }
 
     // Calculate new streak

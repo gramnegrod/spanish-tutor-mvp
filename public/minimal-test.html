@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Minimal OpenAI Realtime Test</title>
+</head>
+<body>
+    <h1>Minimal Connection Test</h1>
+    <button id="testBtn">Test Connection</button>
+    <pre id="log"></pre>
+    <audio id="audio" autoplay></audio>
+
+    <script>
+        const log = document.getElementById('log');
+        const audio = document.getElementById('audio');
+        let pc = null;
+        let dc = null;
+        
+        function addLog(msg) {
+            const time = new Date().toISOString().split('T')[1].split('.')[0];
+            log.textContent += `[${time}] ${msg}\n`;
+            console.log(msg);
+        }
+        
+        document.getElementById('testBtn').addEventListener('click', async () => {
+            log.textContent = '';
+            
+            try {
+                // 1. Get ephemeral key
+                addLog('Fetching ephemeral key...');
+                const tokenRes = await fetch('/api/session');
+                addLog(`Token response: ${tokenRes.status}`);
+                
+                if (!tokenRes.ok) {
+                    throw new Error(`Token fetch failed: ${tokenRes.status}`);
+                }
+                
+                const tokenData = await tokenRes.json();
+                addLog(`Got token data: ${JSON.stringify(tokenData).substring(0, 100)}...`);
+                
+                const ephemeralKey = tokenData.client_secret?.value;
+                if (!ephemeralKey) {
+                    throw new Error('No ephemeral key in response');
+                }
+                
+                // 2. Create peer connection
+                addLog('\nCreating RTCPeerConnection...');
+                pc = new RTCPeerConnection();
+                
+                // Monitor connection states
+                pc.onconnectionstatechange = () => {
+                    addLog(`Connection state: ${pc.connectionState}`);
+                };
+                
+                pc.oniceconnectionstatechange = () => {
+                    addLog(`ICE state: ${pc.iceConnectionState}`);
+                };
+                
+                pc.onicegatheringstatechange = () => {
+                    addLog(`ICE gathering: ${pc.iceGatheringState}`);
+                };
+                
+                // Handle incoming audio
+                pc.ontrack = (e) => {
+                    addLog(`Received track: ${e.track.kind}`);
+                    if (e.track.kind === 'audio') {
+                        audio.srcObject = e.streams[0];
+                        addLog('Audio connected to element');
+                    }
+                };
+                
+                // 3. Add microphone
+                addLog('\nGetting microphone...');
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                pc.addTrack(stream.getTracks()[0]);
+                addLog('Microphone added');
+                
+                // 4. Create data channel
+                addLog('\nCreating data channel...');
+                dc = pc.createDataChannel('oai-events');
+                
+                dc.onopen = () => {
+                    addLog('Data channel opened!');
+                    
+                    // Send session config
+                    const config = {
+                        type: 'session.update',
+                        session: {
+                            modalities: ['text', 'audio'],
+                            instructions: 'Say hello in Spanish!',
+                            voice: 'alloy',
+                            input_audio_format: 'pcm16',
+                            output_audio_format: 'pcm16',
+                            temperature: 0.8
+                        }
+                    };
+                    
+                    dc.send(JSON.stringify(config));
+                    addLog('Sent session config');
+                };
+                
+                dc.onmessage = (e) => {
+                    const event = JSON.parse(e.data);
+                    addLog(`Event: ${event.type}`);
+                    
+                    if (event.type === 'error') {
+                        addLog(`ERROR: ${event.error.message}`);
+                    }
+                };
+                
+                dc.onerror = (e) => {
+                    addLog(`Data channel error: ${e}`);
+                };
+                
+                // 5. Create offer
+                addLog('\nCreating offer...');
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                addLog('Local description set');
+                
+                // 6. Send to OpenAI
+                addLog('\nSending offer to OpenAI...');
+                const openaiRes = await fetch(
+                    'https://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17',
+                    {
+                        method: 'POST',
+                        body: offer.sdp,
+                        headers: {
+                            'Authorization': `Bearer ${ephemeralKey}`,
+                            'Content-Type': 'application/sdp'
+                        }
+                    }
+                );
+                
+                addLog(`OpenAI response: ${openaiRes.status}`);
+                
+                if (!openaiRes.ok) {
+                    const error = await openaiRes.text();
+                    throw new Error(`OpenAI error: ${error}`);
+                }
+                
+                // 7. Set answer
+                const answerSdp = await openaiRes.text();
+                addLog('Got answer from OpenAI');
+                
+                await pc.setRemoteDescription({
+                    type: 'answer',
+                    sdp: answerSdp
+                });
+                
+                addLog('Remote description set');
+                addLog('\n✅ Setup complete! Waiting for connection...');
+                
+            } catch (error) {
+                addLog(`\n❌ ERROR: ${error.message}`);
+                console.error(error);
+                
+                // Clean up
+                if (pc) {
+                    pc.close();
+                    pc = null;
+                }
+            }
+        });
+        
+        // Clean up on page unload
+        window.addEventListener('beforeunload', () => {
+            if (pc) {
+                pc.close();
+            }
+        });
+    </script>
+</body>
+</html>

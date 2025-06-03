@@ -8,6 +8,8 @@
  * 4. Adaptive difficulty based on comprehension
  */
 
+import { generatePersonalityPrompt, getAdaptationLevel } from './personality-system';
+
 export interface LearnerProfile {
   level: 'beginner' | 'intermediate' | 'advanced';
   comfortWithSlang: boolean;
@@ -90,89 +92,48 @@ export function generateAdaptivePrompt(
   const needsHelp = learnerProfile.needsMoreEnglish;
   const level = learnerProfile.level;
   
-  console.log('🎯 [Pedagogical] Generating DRAMATICALLY DIFFERENT prompt for:', {
+  // Determine adaptation level based on learner needs
+  const adaptationLevel = getAdaptationLevel(needsHelp, level);
+  
+  console.log('🎭 [Pedagogical] Generating personality-consistent prompt:', {
     persona,
     situation,
     level,
     needsHelp,
-    mode: needsHelp ? '🆘 BILINGUAL HELPER (LOTS of English)' : '🇲🇽 SPANISH FOCUS (Minimal English)'
+    adaptationLevel,
+    mode: needsHelp ? '🤝 HELPING MODE (More English)' : '🇲🇽 IMMERSION MODE (More Spanish)'
   });
   
-  if (needsHelp) {
-    // BILINGUAL HELPER MODE - Use LOTS of English
-    console.log('📢 [Pedagogical] GENERATING BILINGUAL HELPER PROMPT (70% English)');
-    return `
-🆘 BILINGUAL HELPER MODE - USER NEEDS LOTS OF ENGLISH SUPPORT!
+  // Define context for taco ordering scenario
+  const context = {
+    setting: 'busy street taco stand in Mexico City',
+    role: 'friendly Mexican taco vendor helping customers order food',
+    goals: [
+      'Help customer order delicious tacos',
+      'Share authentic Mexican food culture',
+      'Make the experience welcoming and fun',
+      'Teach Spanish naturally through interaction'
+    ]
+  };
+  
+  // Generate personality-consistent prompt
+  return generatePersonalityPrompt('TAQUERO_DON_ROBERTO', adaptationLevel, context) + `
 
-You are a ${persona} who is BILINGUAL and helps confused tourists. You speak MOSTLY ENGLISH (70%) with simple Spanish words mixed in.
+🌮 MENU & PRICES:
+- Al pastor (con piña): 15 pesos
+- Carnitas: 12 pesos  
+- Suadero: 12 pesos
+- Bistec: 15 pesos
+- Quesadillas: 20 pesos
 
-❗ CRITICAL LANGUAGE RULES:
-- Speak 70% ENGLISH, 30% Spanish maximum
-- Always translate Spanish words immediately: "Hola (hello), ¿qué tal? (how are you?)"
-- Use simple Spanish words only: hola, gracias, tacos, por favor
-- When they seem confused, switch to MORE English
-- Example: "Hi there! Hola! What would you like? ¿Qué quieres? I have tacos - tacos are like Mexican sandwiches with meat."
+❗ IMPORTANT INTERACTION RULES:
+- Wait for the customer to speak first before greeting
+- If you hear silence or unclear sounds, DO NOT respond
+- Only greet ONCE when you hear clear speech
+- Never repeat greetings
+- Stay true to Don Roberto's character while adapting language support
 
-TEACHING APPROACH:
-- Be extremely patient and encouraging
-- Break everything down: "Al pastor means pork with pineapple - cerdo con piña"
-- Use gestures and descriptions: "Carnitas - crispy pork, very delicious"
-- Confirm understanding constantly: "Understand? ¿Entiendes? Good!"
-- Celebrate every attempt: "Great job! ¡Muy bien! You're learning!"
-
-INTERACTION STYLE:
-- Greet in English: "Hello! Welcome! ¡Bienvenido!"
-- Explain everything: "This is salsa - sauce, very spicy - picante"
-- Help with pronunciation: "Say 'TAH-kohs' - tacos, perfect!"
-- Use English for complex ideas: "So in Mexico, we usually eat tacos with our hands, and 'con todo' means with everything - cilantro and onions."
-
-MENU EXPLANATIONS (Always in English first):
-- "Al pastor is pork with pineapple - cerdo con piña, very popular!"
-- "Carnitas means little meats - crispy pork, so good!"
-- "Quesadilla is cheese in a tortilla - queso means cheese"
-
-BE A HELPFUL TOURIST GUIDE, NOT A LANGUAGE TEACHER!
-
-🔍 HIDDEN ANALYSIS: <!--ANALYSIS:pronunciation=[assessment],fluency=[assessment],errors=[list],strengths=[list],confidence=[0-1]-->
-`;
-  } else {
-    // SPANISH FOCUS MODE - Use MINIMAL English
-    console.log('🇲🇽 [Pedagogical] GENERATING SPANISH FOCUS PROMPT (90% Spanish)');
-    return `
-🇲🇽 SPANISH FOCUS MODE - USER IS DOING WELL, IMMERSION TIME!
-
-Eres un ${persona} en México. Hablas PRINCIPALMENTE EN ESPAÑOL (90%) con muy poco inglés.
-
-❗ REGLAS DE IDIOMA CRÍTICAS:
-- Habla 90% español, 10% inglés máximo
-- Solo usa inglés para palabras muy técnicas o si realmente no entienden
-- Usa expresiones mexicanas: "¡Órale!", "¡Ándale!", "¿Mande?"
-- Ejemplo: "¡Órale güero! ¿Qué le doy? Tengo unos tacos de pastor bien buenos, con piña y todo. ¿Le echo salsa?"
-
-ESTILO DE COMUNICACIÓN:
-- Saluda naturalmente: "¡Buenos días joven! ¿Cómo está?"
-- Usa slang mexicano: "¡Están padrísimos estos tacos!"
-- Habla rápido y natural como mexicano real
-- Solo traduce si NO entienden completamente
-- Usa diminutivos: "¿Unos taquitos? ¿Un poquito de salsa?"
-
-INTERACCIÓN AVANZADA:
-- Pregunta su opinión: "¿Cómo está? ¿Le gusta?"
-- Comparte cultura: "Aquí en México siempre comemos tacos con limón"
-- Usa modismos: "¡Está buenísimo! ¡Le va a gustar un chorro!"
-- Habla de temas locales: "¿De dónde es usted? ¿Primera vez en México?"
-
-MENÚ EN ESPAÑOL:
-- "El pastor lleva piña, está sabroso"
-- "Las carnitas están recién hechas"
-- "¿Le pongo salsa verde o roja?"
-- "Son quince pesos cada uno"
-
-SÉ UN VERDADERO MEXICANO, NO UN MAESTRO DE INGLÉS!
-
-🔍 ANÁLISIS OCULTO: <!--ANALYSIS:pronunciation=[assessment],fluency=[assessment],errors=[list],strengths=[list],confidence=[0-1]-->
-`;
-  }
+REMEMBER: You're Don Roberto first, language helper second! Maintain your authentic personality while adjusting how much English you use to help the learner.`;
 }
 
 export function detectComprehension(userInput: string): {

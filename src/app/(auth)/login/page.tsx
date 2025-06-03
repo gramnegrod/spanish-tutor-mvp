@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
@@ -11,41 +10,25 @@ import { Label } from '@/components/ui/label'
 import { Loader2 } from 'lucide-react'
 
 export default function LoginPage() {
-  const router = useRouter()
-  const { signIn, signInWithMagicLink } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [magicLinkSent, setMagicLinkSent] = useState(false)
+  const { signIn } = useAuth()
 
-  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setIsLoading(true)
     setError(null)
-
+    
     const formData = new FormData(event.currentTarget)
     const email = formData.get('email') as string
     const password = formData.get('password') as string
-
-    try {
-      await signIn(email, password)
-      // signIn handles redirect to /practice
-    } catch (error: any) {
-      setError(error.message || 'Invalid email or password')
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  async function handleMagicLink(email: string) {
-    setIsLoading(true)
-    setError(null)
     
     try {
-      await signInWithMagicLink(email)
-      setMagicLinkSent(true)
+      await signIn(email, password)
+      // AuthContext will handle redirect on successful sign in
     } catch (error: any) {
-      setError(error.message || 'Failed to send magic link')
-    } finally {
+      console.error('Login error:', error)
+      setError(error.message || 'An error occurred during sign in')
       setIsLoading(false)
     }
   }
@@ -61,7 +44,7 @@ export default function LoginPage() {
             Sign in to start practicing Mexican Spanish
           </CardDescription>
         </CardHeader>
-        <form onSubmit={onSubmit}>
+        <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
             {error && (
               <div className="p-3 text-sm text-red-500 bg-red-50 rounded-md">
@@ -95,18 +78,19 @@ export default function LoginPage() {
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Sign In
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              onClick={() => {
-                const email = (document.getElementById('email') as HTMLInputElement).value
-                if (email) handleMagicLink(email)
-              }}
-              disabled={isLoading}
-            >
-              Send magic link instead
-            </Button>
+            <div className="relative w-full">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-white px-2 text-gray-500">Or</span>
+              </div>
+            </div>
+            <Link href="/practice-no-auth" className="w-full">
+              <Button type="button" variant="outline" className="w-full">
+                Continue without account
+              </Button>
+            </Link>
             <p className="text-sm text-center text-gray-600">
               Don't have an account?{' '}
               <Link href="/register" className="text-blue-600 hover:underline">
@@ -116,27 +100,6 @@ export default function LoginPage() {
           </CardFooter>
         </form>
       </Card>
-      
-      {magicLinkSent && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <Card className="w-full max-w-md">
-            <CardHeader>
-              <CardTitle>Check your email!</CardTitle>
-              <CardDescription>
-                We sent a magic link to your email. Click the link to sign in.
-              </CardDescription>
-            </CardHeader>
-            <CardFooter>
-              <Button 
-                onClick={() => setMagicLinkSent(false)} 
-                className="w-full"
-              >
-                Back to login
-              </Button>
-            </CardFooter>
-          </Card>
-        </div>
-      )}
     </div>
   )
 }

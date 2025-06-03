@@ -27,17 +27,30 @@ export default function DashboardPage() {
   }, [user, loading, router])
 
   const fetchData = async () => {
+    if (!user) {
+      setIsLoading(false)
+      return
+    }
+
     try {
       // Fetch progress
       const progressResponse = await fetch('/api/progress')
-      const progressData = await progressResponse.json()
-      setProgress(progressData.progress)
-      setStreak(progressData.streak)
+      if (progressResponse.ok) {
+        const progressData = await progressResponse.json()
+        setProgress(progressData.progress)
+        setStreak(progressData.streak)
+      } else {
+        console.warn('Failed to fetch progress:', progressResponse.status)
+      }
 
       // Fetch recent conversations
       const conversationsResponse = await fetch('/api/conversations')
-      const conversationsData = await conversationsResponse.json()
-      setConversations(conversationsData.conversations || [])
+      if (conversationsResponse.ok) {
+        const conversationsData = await conversationsResponse.json()
+        setConversations(conversationsData.conversations || [])
+      } else {
+        console.warn('Failed to fetch conversations:', conversationsResponse.status)
+      }
     } catch (error) {
       console.error('Failed to fetch data:', error)
     } finally {

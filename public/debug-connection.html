@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connection Debug</title>
+    <style>
+        body {
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            line-height: 1.5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .output {
+            background: #2d2d2d;
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            white-space: pre-wrap;
+            font-size: 14px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        button {
+            background: #007acc;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #005a9e;
+        }
+        button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 OpenAI Realtime Connection Debug</h1>
+        <p>This tool will test each step of the connection process to identify where it's failing.</p>
+        
+        <button onclick="runDebugSequence()" id="debugBtn">Start Debug Sequence</button>
+        <button onclick="clearOutput()">Clear Output</button>
+        
+        <div id="output" class="output">Ready to debug... Click "Start Debug Sequence" to begin.</div>
+    </div>
+
+    <script>
+        const output = document.getElementById('output');
+        const debugBtn = document.getElementById('debugBtn');
+
+        function log(message) {
+            const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+            output.textContent += `[${timestamp}] ${message}\n`;
+            output.scrollTop = output.scrollHeight;
+            console.log(message);
+        }
+
+        function clearOutput() {
+            output.textContent = 'Output cleared. Ready for new debug run.\n';
+        }
+
+        // Step 1: Test API endpoint directly
+        async function testEphemeralKeyAPI() {
+            log('📡 Step 1: Testing ephemeral key API...');
+            
+            try {
+                const response = await fetch('/api/session');
+                log(`   Status: ${response.status}`);
+                log(`   Headers: ${JSON.stringify(Object.fromEntries(response.headers.entries()), null, 2)}`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    log(`   Response data keys: ${Object.keys(data)}`);
+                    log(`   Has client_secret: ${!!data.client_secret}`);
+                    log(`   Has value: ${!!data.client_secret?.value}`);
+                    if (data.client_secret?.value) {
+                        log(`   Key preview: ${data.client_secret.value.substring(0, 20)}...`);
+                    }
+                    return data.client_secret?.value;
+                } else {
+                    const error = await response.text();
+                    log(`   Error: ${error}`);
+                    return null;
+                }
+            } catch (error) {
+                log(`   Fetch Error: ${error.message}`);
+                return null;
+            }
+        }
+
+        // Step 2: Test WebRTC peer connection creation
+        async function testWebRTCSetup() {
+            log('\n🌐 Step 2: Testing WebRTC setup...');
+            
+            try {
+                const pc = new RTCPeerConnection({
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' }
+                    ]
+                });
+                
+                log('   RTCPeerConnection created');
+                log(`   Connection state: ${pc.connectionState}`);
+                log(`   ICE connection state: ${pc.iceConnectionState}`);
+                
+                // Add state change listeners
+                pc.onconnectionstatechange = () => {
+                    log(`   🔄 Connection state changed: ${pc.connectionState}`);
+                };
+                
+                pc.oniceconnectionstatechange = () => {
+                    log(`   🧊 ICE connection state changed: ${pc.iceConnectionState}`);
+                };
+                
+                return pc;
+            } catch (error) {
+                log(`   WebRTC Error: ${error.message}`);
+                return null;
+            }
+        }
+
+        // Step 3: Test media access
+        async function testMediaAccess() {
+            log('\n🎤 Step 3: Testing media access...');
+            
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                log('   Media stream created');
+                log(`   Audio tracks: ${stream.getAudioTracks().length}`);
+                const track = stream.getAudioTracks()[0];
+                log(`   Track state: ${track.readyState}`);
+                log(`   Track enabled: ${track.enabled}`);
+                return stream;
+            } catch (error) {
+                log(`   Media Error: ${error.message}`);
+                return null;
+            }
+        }
+
+        // Step 4: Test OpenAI WebRTC connection
+        async function testOpenAIWebRTC(ephemeralKey, pc, mediaStream) {
+            log('\n🤖 Step 4: Testing OpenAI WebRTC connection...');
+            
+            if (!ephemeralKey || !pc || !mediaStream) {
+                log('   Skipping - missing prerequisites');
+                return false;
+            }
+            
+            try {
+                // Add media track
+                pc.addTrack(mediaStream.getTracks()[0]);
+                log('   Media track added');
+                
+                // Create data channel
+                const dc = pc.createDataChannel('oai-events');
+                log('   Data channel created');
+                
+                // Set up data channel handlers
+                dc.onopen = () => {
+                    log('   📨 Data channel opened!');
+                };
+                
+                dc.onmessage = (e) => {
+                    log(`   📨 Data channel message: ${e.data}`);
+                };
+                
+                dc.onerror = (error) => {
+                    log(`   📨 Data channel error: ${error}`);
+                };
+                
+                dc.onclose = () => {
+                    log('   📨 Data channel closed');
+                };
+                
+                // Create offer
+                log('   Creating WebRTC offer...');
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                log('   Local description set');
+                log(`   SDP length: ${offer.sdp.length}`);
+                
+                // Send to OpenAI
+                log('   Sending offer to OpenAI...');
+                const response = await fetch('https://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17', {
+                    method: 'POST',
+                    body: offer.sdp,
+                    headers: {
+                        'Authorization': `Bearer ${ephemeralKey}`,
+                        'Content-Type': 'application/sdp'
+                    }
+                });
+                
+                log(`   OpenAI response status: ${response.status}`);
+                
+                if (response.ok) {
+                    const answerSdp = await response.text();
+                    log(`   Got answer SDP, length: ${answerSdp.length}`);
+                    
+                    await pc.setRemoteDescription({
+                        type: 'answer',
+                        sdp: answerSdp
+                    });
+                    log('   Remote description set');
+                    
+                    // Wait a bit for connection to establish
+                    log('   Waiting for connection to establish...');
+                    await new Promise(resolve => setTimeout(resolve, 3000));
+                    log(`   Final connection state: ${pc.connectionState}`);
+                    log(`   Final ICE state: ${pc.iceConnectionState}`);
+                    log(`   Data channel state: ${dc.readyState}`);
+                    
+                    return pc.connectionState === 'connected' || dc.readyState === 'open';
+                } else {
+                    const error = await response.text();
+                    log(`   OpenAI Error: ${error}`);
+                    return false;
+                }
+            } catch (error) {
+                log(`   WebRTC Connection Error: ${error.message}`);
+                log(`   Stack: ${error.stack}`);
+                return false;
+            }
+        }
+
+        // Run all tests
+        async function runDebugSequence() {
+            debugBtn.disabled = true;
+            clearOutput();
+            log('🔍 Starting connection debug sequence...\n');
+            
+            const ephemeralKey = await testEphemeralKeyAPI();
+            const pc = await testWebRTCSetup();
+            const mediaStream = await testMediaAccess();
+            const connected = await testOpenAIWebRTC(ephemeralKey, pc, mediaStream);
+            
+            log('\n📊 Summary:');
+            log(`   Ephemeral Key: ${ephemeralKey ? '✅ SUCCESS' : '❌ FAILED'}`);
+            log(`   WebRTC Setup: ${pc ? '✅ SUCCESS' : '❌ FAILED'}`);
+            log(`   Media Access: ${mediaStream ? '✅ SUCCESS' : '❌ FAILED'}`);
+            log(`   OpenAI Connection: ${connected ? '✅ SUCCESS' : '❌ FAILED'}`);
+            
+            if (connected) {
+                log('\n🎉 Connection successful! The issue may be in the event handling or state management.');
+                log('   Check if the onConnect event is being properly fired in your service.');
+            } else {
+                log('\n❌ Connection failed. Check the errors above to identify the root cause.');
+            }
+            
+            // Cleanup
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+                log('\n🧹 Media stream stopped');
+            }
+            if (pc) {
+                pc.close();
+                log('🧹 Peer connection closed');
+            }
+            
+            debugBtn.disabled = false;
+        }
+    </script>
+</body>
+</html>

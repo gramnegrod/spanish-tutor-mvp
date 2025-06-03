@@ -1,10 +1,5 @@
-import { createClient } from '@supabase/supabase-js'
 import { ConversationTranscript } from '@/types'
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 // Types for our database tables
 export interface Conversation {
@@ -48,7 +43,7 @@ export interface UserAdaptations {
 
 // Conversation operations
 export const conversationService = {
-  async create(data: {
+  async create(supabase: SupabaseClient, data: {
     user_id: string
     title: string
     persona: string
@@ -65,7 +60,7 @@ export const conversationService = {
     return conversation as Conversation
   },
 
-  async getByUserId(userId: string, limit = 10) {
+  async getByUserId(supabase: SupabaseClient, userId: string, limit = 10) {
     const { data, error } = await supabase
       .from('conversations')
       .select()
@@ -77,7 +72,7 @@ export const conversationService = {
     return data as Conversation[]
   },
 
-  async getById(id: string) {
+  async getById(supabase: SupabaseClient, id: string) {
     const { data, error } = await supabase
       .from('conversations')
       .select()
@@ -88,7 +83,7 @@ export const conversationService = {
     return data as Conversation
   },
 
-  async updateAnalysis(id: string, analysis: any) {
+  async updateAnalysis(supabase: SupabaseClient, id: string, analysis: any) {
     const { data, error } = await supabase
       .from('conversations')
       .update({ analysis })
@@ -100,7 +95,7 @@ export const conversationService = {
     return data as Conversation
   },
 
-  async delete(id: string) {
+  async delete(supabase: SupabaseClient, id: string) {
     const { error } = await supabase
       .from('conversations')
       .delete()
@@ -112,7 +107,7 @@ export const conversationService = {
 
 // Progress operations
 export const progressService = {
-  async getByUserId(userId: string) {
+  async getByUserId(supabase: SupabaseClient, userId: string) {
     const { data, error } = await supabase
       .from('progress')
       .select()
@@ -123,7 +118,7 @@ export const progressService = {
     return data as Progress | null
   },
 
-  async upsert(data: {
+  async upsert(supabase: SupabaseClient, data: {
     user_id: string
     vocabulary?: string[]
     pronunciation?: number
@@ -143,7 +138,7 @@ export const progressService = {
     return progress as Progress
   },
 
-  async incrementStats(userId: string, updates: {
+  async incrementStats(supabase: SupabaseClient, userId: string, updates: {
     minutes_practiced?: number
     conversations_completed?: number
     pronunciation_improvement?: number
@@ -152,7 +147,7 @@ export const progressService = {
     cultural_improvement?: number
   }) {
     // Get current progress
-    const current = await this.getByUserId(userId)
+    const current = await this.getByUserId(supabase, userId)
     
     const updatedData = {
       user_id: userId,
@@ -164,15 +159,15 @@ export const progressService = {
       cultural_knowledge: Math.min(100, (current?.cultural_knowledge || 0) + (updates.cultural_improvement || 0)),
     }
 
-    return this.upsert(updatedData)
+    return this.upsert(supabase, updatedData)
   },
 
-  async addVocabulary(userId: string, words: string[]) {
-    const current = await this.getByUserId(userId)
+  async addVocabulary(supabase: SupabaseClient, userId: string, words: string[]) {
+    const current = await this.getByUserId(supabase, userId)
     const existingVocab = current?.vocabulary || []
     const newVocab = [...new Set([...existingVocab, ...words])]
 
-    return this.upsert({
+    return this.upsert(supabase, {
       user_id: userId,
       vocabulary: newVocab
     })
@@ -181,7 +176,7 @@ export const progressService = {
 
 // User adaptations operations
 export const adaptationsService = {
-  async getByUserId(userId: string) {
+  async getByUserId(supabase: SupabaseClient, userId: string) {
     const { data, error } = await supabase
       .from('user_adaptations')
       .select()
@@ -192,7 +187,7 @@ export const adaptationsService = {
     return data as UserAdaptations | null
   },
 
-  async upsert(data: {
+  async upsert(supabase: SupabaseClient, data: {
     user_id: string
     speaking_pace_preference?: number
     needs_visual_aids?: boolean
@@ -211,21 +206,21 @@ export const adaptationsService = {
     return adaptations as UserAdaptations
   },
 
-  async addError(userId: string, error: string) {
-    const current = await this.getByUserId(userId)
+  async addError(supabase: SupabaseClient, userId: string, error: string) {
+    const current = await this.getByUserId(supabase, userId)
     const errors = [...(current?.common_errors || []), error]
     
-    return this.upsert({
+    return this.upsert(supabase, {
       user_id: userId,
       common_errors: errors
     })
   },
 
-  async addMasteredConcept(userId: string, concept: string) {
-    const current = await this.getByUserId(userId)
+  async addMasteredConcept(supabase: SupabaseClient, userId: string, concept: string) {
+    const current = await this.getByUserId(supabase, userId)
     const concepts = [...new Set([...(current?.mastered_concepts || []), concept])]
     
-    return this.upsert({
+    return this.upsert(supabase, {
       user_id: userId,
       mastered_concepts: concepts
     })
@@ -234,13 +229,13 @@ export const adaptationsService = {
 
 // Helper functions
 export const dbHelpers = {
-  async getCurrentUser() {
+  async getCurrentUser(supabase: SupabaseClient) {
     const { data: { user } } = await supabase.auth.getUser()
     return user
   },
 
-  async requireAuth() {
-    const user = await this.getCurrentUser()
+  async requireAuth(supabase: SupabaseClient) {
+    const user = await this.getCurrentUser(supabase)
     if (!user) throw new Error('Authentication required')
     return user
   }

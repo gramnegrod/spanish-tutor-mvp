@@ -1,11 +1,15 @@
 import { NextResponse } from 'next/server'
 import { conversationService, progressService, dbHelpers } from '@/lib/supabase-db'
+import { createClient } from '@/utils/supabase/server'
 import { ConversationAnalysisService } from '@/services/conversation-analysis'
 
 export async function POST(request: Request) {
   try {
+    // Create server client with proper cookie handling
+    const supabase = await createClient()
+    
     // Get authenticated user
-    const user = await dbHelpers.getCurrentUser()
+    const user = await dbHelpers.getCurrentUser(supabase)
     if (!user) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
     }
@@ -17,7 +21,7 @@ export async function POST(request: Request) {
     }
 
     // Get conversation from Supabase
-    const conversation = await conversationService.getById(conversationId)
+    const conversation = await conversationService.getById(supabase, conversationId)
     
     if (!conversation || conversation.user_id !== user.id) {
       return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
@@ -33,12 +37,13 @@ export async function POST(request: Request) {
 
     // Update conversation with analysis in Supabase
     const updatedConversation = await conversationService.updateAnalysis(
+      supabase,
       conversationId, 
       analysis
     )
 
     // Update user progress based on analysis
-    const progressUpdate = await progressService.incrementStats(user.id, {
+    const progressUpdate = await progressService.incrementStats(supabase, user.id, {
       minutes_practiced: Math.round(analysis.conversation_metrics.totalDuration / 60),
       conversations_completed: 1,
       pronunciation_improvement: Math.round(analysis.quality_assessment.engagement * 10),
@@ -49,7 +54,7 @@ export async function POST(request: Request) {
 
     // Add vocabulary to progress
     if (analysis.vocabulary_used.length > 0) {
-      await progressService.addVocabulary(user.id, analysis.vocabulary_used)
+      await progressService.addVocabulary(supabase, user.id, analysis.vocabulary_used)
     }
 
     return NextResponse.json({

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test OpenAI Connection</title>
+</head>
+<body>
+    <h1>OpenAI Realtime Connection Test</h1>
+    <button id="testBtn">Test Connection</button>
+    <pre id="output"></pre>
+
+    <script>
+        const output = document.getElementById('output');
+        
+        async function log(message) {
+            output.textContent += message + '\n';
+            console.log(message);
+        }
+
+        document.getElementById('testBtn').addEventListener('click', async () => {
+            output.textContent = '';
+            
+            try {
+                log('1. Fetching ephemeral key...');
+                const response = await fetch('/api/session');
+                log(`   Response status: ${response.status}`);
+                
+                if (!response.ok) {
+                    const error = await response.text();
+                    log(`   ERROR: ${error}`);
+                    return;
+                }
+                
+                const data = await response.json();
+                log(`   Response data: ${JSON.stringify(data, null, 2)}`);
+                
+                if (!data.client_secret?.value) {
+                    log('   ERROR: No client_secret in response');
+                    log(`   Full response: ${JSON.stringify(data)}`);
+                    return;
+                }
+                
+                log('   ✓ Got ephemeral key');
+                log(`   Key preview: ${data.client_secret.value.substring(0, 20)}...`);
+                
+                log('\n2. Creating RTCPeerConnection...');
+                const pc = new RTCPeerConnection();
+                
+                pc.onconnectionstatechange = () => {
+                    log(`   Connection state: ${pc.connectionState}`);
+                };
+                
+                log('\n3. Getting user media...');
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                log('   ✓ Got microphone access');
+                
+                pc.addTrack(stream.getTracks()[0]);
+                
+                log('\n4. Creating data channel...');
+                const dc = pc.createDataChannel('oai-events');
+                
+                dc.onopen = () => {
+                    log('   ✓ Data channel opened');
+                };
+                
+                dc.onerror = (error) => {
+                    log(`   Data channel error: ${error}`);
+                };
+                
+                log('\n5. Creating offer...');
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                log('   ✓ Offer created');
+                
+                log('\n6. Sending offer to OpenAI...');
+                const openAIResponse = await fetch(
+                    `https://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17`, 
+                    {
+                        method: 'POST',
+                        body: offer.sdp,
+                        headers: {
+                            'Authorization': `Bearer ${data.client_secret.value}`,
+                            'Content-Type': 'application/sdp'
+                        }
+                    }
+                );
+                
+                log(`   Response status: ${openAIResponse.status}`);
+                
+                if (!openAIResponse.ok) {
+                    const error = await openAIResponse.text();
+                    log(`   ERROR: ${error}`);
+                    return;
+                }
+                
+                const answerSdp = await openAIResponse.text();
+                log('   ✓ Got answer from OpenAI');
+                
+                log('\n7. Setting remote description...');
+                await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
+                log('   ✓ Remote description set');
+                
+                log('\n✅ Connection test complete! Check connection state above.');
+                
+            } catch (error) {
+                log(`\n❌ ERROR: ${error.message}`);
+                console.error(error);
+            }
+        });
+    </script>
+</body>
+</html>
