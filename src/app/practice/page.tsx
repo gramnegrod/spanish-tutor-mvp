@@ -6,17 +6,18 @@ import { useAuth } from '@/contexts/AuthContext'
 import { ConversationUI } from '@/components/audio/ConversationUI'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { AuthHeader } from '@/components/layout/AuthHeader'
 import { useOpenAIRealtime } from '@/hooks/useOpenAIRealtime'
 import { ArrowLeft, RefreshCw, Mic, Loader2 } from 'lucide-react'
-import { detectComprehension } from '@/lib/pedagogical-system'
+import { detectComprehension, generateAdaptivePrompt, PEDAGOGICAL_SITUATIONS, extractHiddenAnalysis, updateProfileFromAnalysis, LearnerProfile } from '@/lib/pedagogical-system'
 import { ConversationTranscript } from '@/types'
-import { conversationService, progressService } from '@/lib/supabase-db'
+// Remove direct database imports - use API routes instead
 import { ConversationAnalysisService } from '@/services/conversation-analysis'
 
 export default function PracticePage() {
   console.log('[Practice] Component rendering...');
   const router = useRouter()
-  const { user, loading, signOut } = useAuth()
+  const { user, loading } = useAuth()
   console.log('[Practice] Auth state:', { user: !!user, loading });
   const [conversationStartTime, setConversationStartTime] = useState<Date | null>(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
@@ -25,13 +26,71 @@ export default function PracticePage() {
   const [isProcessing, setIsProcessing] = useState(false)
 
   // Track learner profile
-  const [learnerProfile, setLearnerProfile] = useState({
-    level: 'beginner' as const,
+  const [learnerProfile, setLearnerProfile] = useState<LearnerProfile>({
+    level: 'beginner',
     comfortWithSlang: false,
     needsMoreEnglish: true,
-    strugglingWords: [] as string[],
-    masteredPhrases: [] as string[]
+    strugglingWords: [],
+    masteredPhrases: []
   });
+  
+  // Current scenario state
+  const [currentScenario] = useState('taco_ordering'); // Can be dynamic later
+  
+  // Adaptation cooldown state
+  const [lastAdaptationTime, setLastAdaptationTime] = useState<number>(0);
+  const ADAPTATION_COOLDOWN_MS = 30000; // 30 seconds
+  
+  // Function to update AI instructions based on learner profile
+  const updateAIInstructions = (profile: typeof learnerProfile) => {
+    console.log('[Practice] updateAIInstructions called with profile:', {
+      level: profile.level,
+      needsMoreEnglish: profile.needsMoreEnglish,
+      strugglingWords: profile.strugglingWords.length,
+      masteredPhrases: profile.masteredPhrases.length
+    });
+    
+    const adaptivePrompt = generateAdaptivePrompt(
+      'friendly Mexican taco vendor (taquero) Don Roberto in Mexico City at a busy street stand',
+      currentScenario,
+      profile
+    );
+    
+    // Add the specific menu and personality details
+    const fullPrompt = `${adaptivePrompt}
+
+PERSONALITY:
+- Name: Don Roberto, 45 years old, been selling tacos for 20 years
+- Warm, patient, loves to chat with customers
+- Proud of your tacos, especially your al pastor
+- Call people "güero/güera", "joven", "amigo/amiga"
+
+IMPORTANT RULES:
+- Wait for the customer to speak first before greeting
+- If you hear silence or unclear sounds, DO NOT respond
+- Only greet ONCE when you hear clear speech
+- Never repeat greetings
+
+MENU & PRICES:
+- Al pastor (con piña): 15 pesos
+- Carnitas: 12 pesos
+- Suadero: 12 pesos  
+- Bistec: 15 pesos
+- Quesadillas: 20 pesos
+
+REMEMBER: You're not a language teacher, you're a taco vendor who happens to help tourists learn Spanish naturally.`;
+    
+    if (updateInstructions) {
+      console.log('[Practice] Sending updated instructions to OpenAI. Profile state:', {
+        needsMoreEnglish: profile.needsMoreEnglish,
+        mode: profile.needsMoreEnglish ? 'Bilingual Helper' : 'Spanish Focus'
+      });
+      updateInstructions(fullPrompt);
+      console.log('[Practice] Instructions updated successfully');
+    } else {
+      console.warn('[Practice] updateInstructions function not available!');
+    }
+  };
 
   const {
     isConnected,
@@ -50,7 +109,9 @@ export default function PracticePage() {
     disconnect,
     audioRef
   } = useOpenAIRealtime({
-    enableInputTranscription: true, // Enable to get user transcripts
+    // Enable input transcription - Whisper's struggles with poor pronunciation
+    // actually help our adaptive learning detect when users need help!
+    enableInputTranscription: true,
     instructions: `You are a friendly Mexican taco vendor (taquero) in Mexico City at a busy street stand.
 
 PERSONALITY:
@@ -94,10 +155,37 @@ REMEMBER: You're not a language teacher, you're a taco vendor who happens to hel
       silenceDurationMs: 800 // Increased from 200ms to wait longer before responding
     },
     onTranscript: (role, text) => {
+      let displayText = text;
+      
+      // Process assistant responses for hidden analysis
+      if (role === 'assistant') {
+        const { cleanText, analysis } = extractHiddenAnalysis(text);
+        displayText = cleanText;
+        
+        if (analysis) {
+          console.log('[Practice] Hidden analysis extracted:', analysis);
+          
+          // Update learner profile with analysis
+          const updatedProfile = updateProfileFromAnalysis(learnerProfile, analysis);
+          setLearnerProfile(updatedProfile);
+          
+          // Save updated profile to database
+          saveUserAdaptations(updatedProfile);
+          
+          // Log for debugging
+          console.log('[Practice] Profile updated from analysis:', {
+            pronunciation: updatedProfile.pronunciation,
+            fluency: updatedProfile.fluency,
+            confidence: updatedProfile.averageConfidence,
+            level: updatedProfile.level
+          });
+        }
+      }
+      
       setTranscripts(prev => [...prev, {
         id: crypto.randomUUID(),
         speaker: role as 'user' | 'assistant',
-        text,
+        text: displayText, // Use cleaned text without analysis
         timestamp: new Date()
       }]);
       setCurrentSpeaker(role);
@@ -105,13 +193,103 @@ REMEMBER: You're not a language teacher, you're a taco vendor who happens to hel
       
       // Analyze comprehension if user spoke
       if (role === 'user') {
-        const { understood, confidence } = detectComprehension(text);
+        // Add empty transcript validation
+        if (!text || text.trim().length === 0) {
+          console.log('[Practice] Empty user transcript, skipping analysis');
+          return;
+        }
+        
+        const { understood, confidence, indicators } = detectComprehension(text);
+        console.log('[Practice] Comprehension analysis:', { understood, confidence, indicators, text });
+        
+        // Track vocabulary usage and errors
+        const spanishWords = extractSpanishWords(text);
+        const newMasteredPhrases = [...learnerProfile.masteredPhrases];
+        const newStrugglingWords = [...learnerProfile.strugglingWords];
+        
+        // Add new Spanish words as mastered if used correctly
+        if (understood && spanishWords.length > 0) {
+          spanishWords.forEach(word => {
+            if (!newMasteredPhrases.includes(word)) {
+              newMasteredPhrases.push(word);
+            }
+          });
+        }
+        
+        // Track confusion indicators as struggling words
+        if (!understood && indicators.length > 0) {
+          indicators.forEach(indicator => {
+            if (!newStrugglingWords.includes(indicator)) {
+              newStrugglingWords.push(indicator);
+            }
+          });
+        }
+        
+        // Check cooldown before adaptation
+        const now = Date.now();
+        const timeSinceLastAdaptation = now - lastAdaptationTime;
+        const canAdapt = timeSinceLastAdaptation >= ADAPTATION_COOLDOWN_MS;
+        
         if (!understood && confidence < 0.3) {
           // User seems confused, adapt the prompt
-          setLearnerProfile(prev => ({ ...prev, needsMoreEnglish: true }));
+          if (canAdapt && !learnerProfile.needsMoreEnglish) {
+            console.log('[Practice] User needs help - switching to Bilingual Helper mode');
+            console.log('[Practice] Comprehension analysis:', {
+              understood,
+              confidence,
+              indicators,
+              cooldownRemaining: 0
+            });
+            
+            const newProfile = { 
+              ...learnerProfile, 
+              needsMoreEnglish: true,
+              strugglingWords: newStrugglingWords,
+              masteredPhrases: newMasteredPhrases
+            };
+            setLearnerProfile(newProfile);
+            updateAIInstructions(newProfile);
+            saveUserAdaptations(newProfile);
+            setLastAdaptationTime(now);
+          } else if (!canAdapt) {
+            console.log('[Practice] ADAPTATION COOLDOWN - Waiting before mode switch', {
+              cooldownRemaining: Math.ceil((ADAPTATION_COOLDOWN_MS - timeSinceLastAdaptation) / 1000),
+              currentMode: learnerProfile.needsMoreEnglish ? 'Bilingual Helper' : 'Spanish Focus'
+            });
+          }
         } else if (understood && confidence > 0.7) {
           // User is doing well
-          setLearnerProfile(prev => ({ ...prev, needsMoreEnglish: false }));
+          if (canAdapt && learnerProfile.needsMoreEnglish) {
+            console.log('[Practice] User doing well - switching to Spanish Focus mode');
+            console.log('[Practice] Comprehension analysis:', {
+              understood,
+              confidence,
+              indicators,
+              cooldownRemaining: 0
+            });
+            
+            const newProfile = { 
+              ...learnerProfile, 
+              needsMoreEnglish: false,
+              strugglingWords: newStrugglingWords,
+              masteredPhrases: newMasteredPhrases
+            };
+            setLearnerProfile(newProfile);
+            updateAIInstructions(newProfile);
+            saveUserAdaptations(newProfile);
+            setLastAdaptationTime(now);
+          } else if (!canAdapt) {
+            console.log('[Practice] ADAPTATION COOLDOWN - Waiting before mode switch', {
+              cooldownRemaining: Math.ceil((ADAPTATION_COOLDOWN_MS - timeSinceLastAdaptation) / 1000),
+              currentMode: learnerProfile.needsMoreEnglish ? 'Bilingual Helper' : 'Spanish Focus'
+            });
+          }
+        } else {
+          console.log('[Practice] No mode change needed. Current analysis:', {
+            understood,
+            confidence,
+            currentMode: learnerProfile.needsMoreEnglish ? 'Bilingual Helper' : 'Spanish Focus'
+          });
         }
       }
     }
@@ -125,6 +303,77 @@ REMEMBER: You're not a language teacher, you're a taco vendor who happens to hel
       console.log('[Practice] User found:', user.email);
     }
   }, [user, loading, router])
+  
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      console.log('[Practice] Component unmounting, disconnecting...');
+      if (isConnected) {
+        disconnect();
+      }
+    };
+  }, [isConnected, disconnect])
+
+  // Load user adaptations when user is available
+  useEffect(() => {
+    if (user) {
+      loadUserAdaptations();
+    }
+  }, [user]);
+
+  const loadUserAdaptations = async () => {
+    if (!user) return;
+    
+    try {
+      console.log('[Practice] Loading user adaptations...');
+      const response = await fetch('/api/adaptations');
+      
+      if (response.ok) {
+        const { adaptations } = await response.json();
+        
+        if (adaptations) {
+          // Convert database adaptations to learner profile format
+          const profile = {
+            level: 'beginner' as const, // TODO: Determine level from adaptations
+            comfortWithSlang: false, // TODO: Add to database schema
+            needsMoreEnglish: adaptations.common_errors.length > 3, // Infer from errors
+            strugglingWords: adaptations.common_errors,
+            masteredPhrases: adaptations.mastered_concepts
+          };
+          
+          console.log('[Practice] Loaded adaptations:', profile);
+          setLearnerProfile(profile);
+          
+          // Update AI instructions with loaded profile
+          updateAIInstructions(profile);
+        } else {
+          console.log('[Practice] No existing adaptations found, using defaults');
+        }
+      }
+    } catch (error) {
+      console.error('[Practice] Failed to load user adaptations:', error);
+    }
+  };
+
+
+  const saveUserAdaptations = async (profile: typeof learnerProfile) => {
+    if (!user) return;
+    
+    try {
+      console.log('[Practice] Saving user adaptations:', profile);
+      await fetch('/api/adaptations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          common_errors: profile.strugglingWords,
+          mastered_concepts: profile.masteredPhrases,
+          struggle_areas: profile.needsMoreEnglish ? ['comprehension'] : []
+        })
+      });
+    } catch (error) {
+      console.error('[Practice] Failed to save user adaptations:', error);
+    }
+  };
 
   // Simplified connection state - no auto-connect
   const [hasManuallyConnected, setHasManuallyConnected] = useState(false);
@@ -168,20 +417,39 @@ REMEMBER: You're not a language teacher, you're a taco vendor who happens to hel
       ? Math.floor((endTime.getTime() - conversationStartTime.getTime()) / 1000)
       : 0
 
+    // Debug: Log session summary
+    console.log('[Practice] Session summary:', {
+      totalTranscripts: transcripts.length,
+      userTranscripts: transcripts.filter(t => t.speaker === 'user').length,
+      assistantTranscripts: transcripts.filter(t => t.speaker === 'assistant').length,
+      adaptationsMade: lastAdaptationTime > 0,
+      finalMode: learnerProfile.needsMoreEnglish ? 'Bilingual Helper' : 'Spanish Focus',
+      duration: `${duration}s`
+    });
+
     try {
       if (!user) {
         throw new Error('User not authenticated')
       }
 
-      // Save conversation to Supabase
+      // Save conversation to Supabase via API
       console.log('[Practice] Saving conversation to Supabase...');
-      const conversation = await conversationService.create({
-        user_id: user.id,
-        title: 'Taco Ordering Practice',
-        persona: 'TAQUERO',
-        transcript: transcripts,
-        duration
-      })
+      const saveResponse = await fetch('/api/conversations/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: 'Taco Ordering Practice',
+          persona: 'TAQUERO',
+          transcript: transcripts,
+          duration
+        })
+      });
+
+      if (!saveResponse.ok) {
+        throw new Error('Failed to save conversation');
+      }
+
+      const { conversation } = await saveResponse.json();
       console.log('[Practice] Conversation saved with ID:', conversation.id);
 
       // Analyze conversation using text-only analysis
@@ -191,83 +459,79 @@ REMEMBER: You're not a language teacher, you're a taco vendor who happens to hel
         'beginner', // TODO: Get actual user level
         ['order_food', 'ask_price', 'polite_interaction']
       )
+      
+      // Debug log to see what analysis contains
+      console.log('[Practice] Analysis results:', JSON.stringify(analysis, null, 2))
 
-      // Update conversation with analysis
-      await conversationService.updateAnalysis(conversation.id, analysis)
+      // Update conversation with analysis via API
+      await fetch('/api/conversations/update-analysis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversationId: conversation.id,
+          analysis
+        })
+      })
 
       // Extract vocabulary for progress tracking
       const vocabulary = analysisService.extractVocabulary(transcripts)
 
-      // Update user progress
+      // Update user progress via API
       console.log('[Practice] Updating user progress...');
-      const progressUpdate = await progressService.incrementStats(user.id, {
-        minutes_practiced: Math.ceil(duration / 60),
-        conversations_completed: 1,
-        // Simple progress increments based on analysis
-        pronunciation_improvement: analysis.quality_assessment.engagement > 0.7 ? 2 : 1,
-        grammar_improvement: analysis.mistakes.length < 3 ? 2 : 1,
-        fluency_improvement: analysis.conversation_metrics.wordsPerMinute > 60 ? 2 : 1,
-        cultural_improvement: analysis.cultural_notes.length > 0 ? 2 : 1
-      })
-      console.log('[Practice] Progress updated:', {
-        totalConversations: progressUpdate.conversations_completed,
-        totalMinutes: progressUpdate.total_minutes_practiced,
-        pronunciation: progressUpdate.pronunciation,
-        grammar: progressUpdate.grammar,
-        fluency: progressUpdate.fluency,
-        cultural: progressUpdate.cultural_knowledge
+      const progressResponse = await fetch('/api/progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vocabulary,
+          minutesPracticed: Math.ceil(duration / 60),
+          pronunciationImprovement: analysis.quality_assessment.engagement > 0.7 ? 2 : 1,
+          grammarImprovement: analysis.mistakes.length < 3 ? 2 : 1,
+          fluencyImprovement: analysis.conversation_metrics.wordsPerMinute > 60 ? 2 : 1,
+          culturalImprovement: analysis.cultural_notes.length > 0 ? 2 : 1
+        })
       });
 
-      // Add new vocabulary
-      if (vocabulary.length > 0) {
-        await progressService.addVocabulary(user.id, vocabulary)
+      if (!progressResponse.ok) {
+        const errorData = await progressResponse.json();
+        console.error('[Practice] Progress save failed:', {
+          status: progressResponse.status,
+          error: errorData
+        });
+        throw new Error(`Failed to save progress: ${progressResponse.status}`);
       }
 
+      const { progress } = await progressResponse.json();
+      console.log('[Practice] Progress updated:', {
+        totalConversations: progress.conversations_completed,
+        totalMinutes: progress.total_minutes_practiced,
+        pronunciation: progress.pronunciation,
+        grammar: progress.grammar,
+        fluency: progress.fluency,
+        cultural: progress.cultural_knowledge
+      });
+
       // Show detailed analysis results
-      const analysisMessage = `
-🎉 Conversation Analysis Complete!
-
-📊 Performance Metrics:
-• Words per minute: ${analysis.conversation_metrics.wordsPerMinute}
-• Total duration: ${Math.round(analysis.conversation_metrics.totalDuration)}s
-• New vocabulary: ${vocabulary.length} words
-• Completion: ${Math.round(analysis.quality_assessment.completeness * 100)}%
-• Engagement: ${Math.round(analysis.quality_assessment.engagement * 100)}%
-
-✅ What you did well:
-${analysis.wins.slice(0, 3).map(w => `• ${w}`).join('\n')}
-
-📝 Areas to improve:
-${analysis.mistakes.slice(0, 3).map(m => `• ${m}`).join('\n')}
-
-🎯 Recommendations:
-${analysis.recommendations.slice(0, 2).map(r => `• ${r}`).join('\n')}
-
-Progress Updated:
-• Pronunciation: +${analysis.quality_assessment.engagement > 0.7 ? 2 : 1} points
-• Grammar: +${analysis.mistakes.length < 3 ? 2 : 1} points
-• Fluency: +${analysis.conversation_metrics.wordsPerMinute > 60 ? 2 : 1} points
-• Cultural Knowledge: +${analysis.cultural_notes.length > 0 ? 2 : 1} points
-      `.trim()
-      
-      alert(analysisMessage)
+      alert('🎉 Conversation Analysis Complete! Check console for details.');
+      console.log('[Practice] Analysis results:', JSON.stringify(analysis, null, 2));
       
     } catch (error) {
-      console.error('Failed to save conversation:', error)
+      console.error('Failed to save conversation:', error);
       
       // Create fallback analysis if detailed analysis fails
-      const analysisService = new ConversationAnalysisService()
-      const fallbackAnalysis = ConversationAnalysisService.createFallbackAnalysis(transcripts)
+      const analysisService = new ConversationAnalysisService();
+      const fallbackAnalysis = ConversationAnalysisService.createFallbackAnalysis(transcripts);
       
-      alert(`Conversation saved with basic analysis. Used ${fallbackAnalysis.vocabulary_used.length} vocabulary words.`)
+      alert(`Conversation saved with basic analysis. Used ${fallbackAnalysis.vocabulary_used.length} vocabulary words.`);
     } finally {
-      setIsAnalyzing(false)
+      setIsAnalyzing(false);
     }
   }
 
   const handleRestart = () => {
     setTranscripts([])
     setConversationStartTime(null)
+    setConsecutiveSuccesses(0); // Reset adaptation counters
+    setConsecutiveFailures(0);
     startFreshSession()
   }
 
@@ -285,30 +549,15 @@ Progress Updated:
   }
 
   return (
-    <div className="min-h-screen p-4">
-      <div className="max-w-4xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <Button
-            variant="ghost"
-            onClick={() => router.push('/')}
-            className="flex items-center gap-2"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back
-          </Button>
-          <h1 className="text-2xl font-bold">Practice with Taquero</h1>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600">{user?.email}</span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => signOut()}
-            >
-              Logout
-            </Button>
+    <div className="min-h-screen">
+      <AuthHeader />
+      <div className="p-4">
+        <div className="max-w-4xl mx-auto space-y-6">
+          {/* Page Title */}
+          <div className="text-center">
+            <h1 className="text-3xl font-bold">Practice with Taquero</h1>
+            <p className="text-gray-600 mt-2">Order tacos from a friendly Mexican street vendor</p>
           </div>
-        </div>
 
         {/* Main Content */}
         <div className="grid md:grid-cols-2 gap-6">
@@ -452,22 +701,105 @@ Progress Updated:
                 </div>
                 
                 <div className="mt-3 pt-3 border-t border-gray-200">
-                  <p className="font-semibold text-xs mb-2">Learning Progress:</p>
-                  <div className="text-xs">
+                  <p className="font-semibold text-xs mb-2">🧠 Adaptive Learning:</p>
+                  <div className="text-xs space-y-2">
                     <div className="flex items-center gap-2">
                       <span>Comprehension:</span>
                       <div className="flex-1 bg-gray-200 rounded-full h-2">
                         <div 
-                          className="bg-green-500 h-2 rounded-full transition-all"
+                          className={`h-2 rounded-full transition-all ${learnerProfile.needsMoreEnglish ? 'bg-orange-500' : 'bg-green-500'}`}
                           style={{ width: `${learnerProfile.needsMoreEnglish ? '30%' : '70%'}` }}
                         />
                       </div>
+                      <span className={`text-xs ${learnerProfile.needsMoreEnglish ? 'text-orange-600' : 'text-green-600'}`}>
+                        {learnerProfile.needsMoreEnglish ? 'Needs help' : 'Doing well'}
+                      </span>
                     </div>
+                    
+                    <div className="text-xs">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span>✅ Mastered:</span>
+                        <span className="text-green-600">{learnerProfile.masteredPhrases.length} words</span>
+                      </div>
+                      {learnerProfile.masteredPhrases.length > 0 && (
+                        <div className="text-green-600 truncate">
+                          {learnerProfile.masteredPhrases.slice(-3).join(', ')}
+                        </div>
+                      )}
+                    </div>
+                    
+                    {learnerProfile.strugglingWords.length > 0 && (
+                      <div className="text-xs">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span>⚠️ Struggling:</span>
+                          <span className="text-orange-600">{learnerProfile.strugglingWords.length} items</span>
+                        </div>
+                        <div className="text-orange-600 truncate">
+                          {learnerProfile.strugglingWords.slice(-3).join(', ')}
+                        </div>
+                      </div>
+                    )}
+                    
+                    <div className="text-xs pt-1 border-t border-gray-300">
+                      <div className="flex items-center gap-2">
+                        <span>🤖 AI Mode:</span>
+                        <span className={`font-medium ${learnerProfile.needsMoreEnglish ? 'text-blue-600' : 'text-purple-600'}`}>
+                          {learnerProfile.needsMoreEnglish ? 'Bilingual Helper' : 'Spanish Focus'}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    {/* Hidden Analysis Results */}
+                    {(learnerProfile.pronunciation || learnerProfile.fluency) && (
+                      <div className="text-xs pt-1 border-t border-gray-300 space-y-1">
+                        {learnerProfile.pronunciation && (
+                          <div className="flex items-center gap-2">
+                            <span>🗣️ Pronunciation:</span>
+                            <span className={`font-medium ${
+                              learnerProfile.pronunciation === 'excellent' ? 'text-green-600' :
+                              learnerProfile.pronunciation === 'good' ? 'text-blue-600' :
+                              learnerProfile.pronunciation === 'fair' ? 'text-yellow-600' :
+                              'text-orange-600'
+                            }`}>
+                              {learnerProfile.pronunciation}
+                            </span>
+                          </div>
+                        )}
+                        {learnerProfile.fluency && (
+                          <div className="flex items-center gap-2">
+                            <span>💬 Fluency:</span>
+                            <span className={`font-medium ${
+                              learnerProfile.fluency === 'fluent' ? 'text-green-600' :
+                              learnerProfile.fluency === 'conversational' ? 'text-blue-600' :
+                              learnerProfile.fluency === 'developing' ? 'text-yellow-600' :
+                              'text-orange-600'
+                            }`}>
+                              {learnerProfile.fluency}
+                            </span>
+                          </div>
+                        )}
+                        {learnerProfile.averageConfidence !== undefined && (
+                          <div className="flex items-center gap-2">
+                            <span>📊 Confidence:</span>
+                            <div className="flex-1 bg-gray-200 rounded-full h-1.5 max-w-[60px]">
+                              <div 
+                                className="h-1.5 rounded-full bg-blue-500 transition-all"
+                                style={{ width: `${learnerProfile.averageConfidence * 100}%` }}
+                              />
+                            </div>
+                            <span className="text-xs text-gray-600">
+                              {Math.round(learnerProfile.averageConfidence * 100)}%
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
             </CardContent>
           </Card>
+          </div>
         </div>
       </div>
 
@@ -521,7 +853,10 @@ Progress Updated:
             <div className="text-sm mb-4">
               <div className="font-semibold">Final session cost: ${costs?.totalCost.toFixed(4) || '0.0000'}</div>
             </div>
-            <Button onClick={() => router.push('/dashboard')} className="w-full">
+            <Button onClick={() => {
+              disconnect(); // Disconnect voice service first
+              router.push('/dashboard');
+            }} className="w-full">
               Return to Dashboard
             </Button>
           </div>
@@ -545,4 +880,65 @@ function extractVocabulary(transcripts: any[]): string[] {
     }
   })
   return Array.from(words).slice(0, 10)
+}
+
+function extractSpanishWords(text: string): string[] {
+  // Extract Spanish words from user input
+  const commonSpanishWords = [
+    // Basic greetings and courtesy
+    'hola', 'gracias', 'por favor', 'buenos', 'días', 'tardes', 'noches', 
+    'adiós', 'hasta', 'luego', 'disculpe', 'perdón', 'con permiso',
+    
+    // Mexican cultural expressions
+    'órale', 'ándale', 'güero', 'güera', 'joven', 'amigo', 'amiga',
+    'mero', 'padrísimo', 'chido', 'sale', 'simón', 'nel', 'mande',
+    
+    // Food vocabulary (Mexican specific)
+    'tacos', 'pastor', 'carnitas', 'suadero', 'bistec', 'quesadilla', 
+    'tortilla', 'piña', 'cebolla', 'cilantro', 'salsa', 'verde', 'roja',
+    'picante', 'limón', 'aguacate', 'frijoles', 'guacamole', 'chicharrón',
+    
+    // Ordering and transactions
+    'quiero', 'me da', 'quisiera', 'deme', 'póngame', 'cuánto', 'cuesta',
+    'cuántos', 'pesos', 'dinero', 'cambio', 'aquí', 'está', 'todo', 
+    'nada', 'más', 'menos', 'con todo', 'sin', 'para llevar', 'para aquí',
+    
+    // Descriptions and reactions
+    'muy', 'bien', 'rico', 'delicioso', 'sabroso', 'bueno', 'excelente',
+    'perfecto', 'está', 'están', 'hay', 'tiene', 'quiere', 'puede',
+    
+    // Mexican diminutives
+    'taquitos', 'salsita', 'limoncito', 'poquito', 'ahorita', 'cerquita'
+  ];
+  
+  // Handle phrases (not just single words)
+  const mexicanPhrases = [
+    'por favor', 'me da', 'con todo', 'para llevar', 'para aquí',
+    'está bien', 'muy rico', 'qué rico', 'cuánto cuesta', 'cuánto es',
+    'aquí tiene', 'con permiso', 'buenas tardes', 'hasta luego'
+  ];
+  
+  const lowerText = text.toLowerCase();
+  const detectedWords: string[] = [];
+  
+  // Check for phrases first
+  mexicanPhrases.forEach(phrase => {
+    if (lowerText.includes(phrase)) {
+      detectedWords.push(phrase);
+    }
+  });
+  
+  // Then check individual words
+  const words = lowerText
+    .replace(/[¿¡.,!?]/g, ' ')
+    .split(/\s+/)
+    .filter(word => word.length > 2);
+  
+  words.forEach(word => {
+    if (commonSpanishWords.includes(word) && !detectedWords.includes(word)) {
+      detectedWords.push(word);
+    }
+  });
+  
+  return detectedWords;
 }

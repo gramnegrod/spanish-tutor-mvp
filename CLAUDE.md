@@ -1,5 +1,64 @@
 # Spanish Tutor MVP - Development Guide
 
+## Core Problem-Solving Philosophy (from CLAUDE-MASTER)
+
+### Always Find Root Causes
+- NEVER fix symptoms without understanding the disease
+- Use "5 Whys" approach for persistent errors
+- If a fix doesn't work, STOP and reassess - you're probably fixing the wrong thing
+
+### Debugging Methodology
+
+1. **Trace Before Fixing**
+   - Follow the actual code execution path
+   - Don't assume where errors originate
+   - Say: "Let me trace where this actually happens" not "This must be in X"
+
+2. **Verify Assumptions**
+   - State hypotheses explicitly: "I think X because Y, let me verify"
+   - Check your assumptions before making changes
+   - If surprised by behavior, your mental model is wrong
+
+3. **Think Architecturally**
+   - Consider client/server boundaries
+   - Check service layer accessibility
+   - Trace data flow through the entire stack
+   - Ask: "Is this the right place for this code?"
+
+4. **Systematic Fixes**
+   - One deep fix > five shallow patches
+   - Address root cause, not error messages
+   - Verify the fix actually works
+   - Check for similar issues elsewhere
+
+### Anti-Patterns to Avoid
+
+❌ **Whack-a-Mole Debugging**
+- Making similar fixes repeatedly
+- Fixing error messages without understanding causes
+- Adding "just one more check" without addressing why
+
+❌ **Assumption-Based Fixes**
+- "AuthError must be in AuthContext"
+- "This should work" without verification
+- Pattern matching without investigation
+
+❌ **Local Optimization**
+- Fixing immediate error without seeing bigger picture
+- Making code work without asking if it should exist there
+- Patching integration issues instead of architectural ones
+
+### When to Go Deep
+
+ALWAYS do comprehensive analysis for:
+- Authentication/authorization issues
+- Errors that persist after first fix
+- Integration between services/layers
+- "Works here but not there" problems
+- Client/server communication issues
+
+---
+
 ## Project Overview
 A Spanish learning application using OpenAI's Realtime API for voice-based conversations with an AI tutor.
 
@@ -101,8 +160,10 @@ lib/openai-realtime/
 npm run dev
 
 # Working practice pages (use these!):
-# http://localhost:3000/simple-practice      - Simple version with connection test
-# http://localhost:3000/practice-no-auth     - Full UI without authentication
+# http://localhost:3000/practice-no-auth     - Full featured guest mode with progress tracking
+# http://localhost:3000/adaptive-practice    - Structured scenarios (requires auth)
+# http://localhost:3000/practice             - Main practice (requires auth, fixed!)
+# http://localhost:3000/simple-practice      - Minimal test version
 
 # Test pages for debugging:
 # http://localhost:3000/minimal-test.html    - Minimal WebRTC connection test
@@ -126,10 +187,11 @@ npm run dev
 
 ## Known Issues
 
-- Main `/practice` page broken due to mixed NextAuth/Supabase auth systems
-- API routes expect NextAuth but app uses Supabase Auth  
-- Type imports reference Prisma but app uses Supabase (causes module resolution failures)
-- Use `/practice-no-auth` or `/simple-practice` pages instead until migration is complete
+- ✅ ~~Main `/practice` page broken~~ - FIXED in Phase 3
+- ✅ ~~API routes expect NextAuth~~ - FIXED, now use Supabase
+- ✅ ~~Type imports reference Prisma~~ - FIXED, cleaned up
+- 🔧 Environment variables for API keys still need proper setup
+- 🔧 Some API routes still use hardcoded keys (temporary workaround)
 
 ## OpenAI Model Reference (Updated January 2025)
 
@@ -176,6 +238,13 @@ model: 'gpt-4o-mini'  // ✅ CORRECT - Cost effective
 - **Database**: Mixed state - Prisma configured but not synced with Supabase users
 - **API Routes**: Broken - expecting NextAuth sessions but getting Supabase auth
 - **Conversation Analysis**: Failing - expects audio files that don't exist
+
+#### ✅ COMPLETE: Phase 3 - Authentication & Persistence (February 2025)
+- **Removed NextAuth**: Deleted all NextAuth remnants, fixed type imports
+- **Modern Auth**: Upgraded to `@supabase/ssr` package with proper security
+- **Guest Mode**: Implemented full guest mode with localStorage persistence
+- **Unified Storage**: Created `UnifiedStorageService` for seamless auth/guest handling
+- **Build Success**: Fixed all TypeScript errors, all pages building correctly
 
 #### Migration Plan:
 
@@ -228,6 +297,28 @@ model: 'gpt-4o-mini'  // ✅ CORRECT - Cost effective
 - Users still speak and get real-time feedback
 - Core learning metrics are captured
 - Architecture supports adding audio later
+
+### Guest Mode Implementation (MVP Enhancement)
+
+**Architecture Overview:**
+- **GuestStorageService** (`/src/lib/guest-storage.ts`) - localStorage management
+- **UnifiedStorageService** (`/src/lib/unified-storage.ts`) - Unified API for auth/guest
+- **Migration Ready** - Automatic guest→user data transfer on signup
+
+**What Guests Can Do:**
+- ✅ Full adaptive learning with profile persistence
+- ✅ Save conversations and progress locally
+- ✅ Track vocabulary and practice time
+- ✅ Experience all features except cross-device sync
+- ✅ Smart signup prompts based on usage
+
+**Implementation Details:**
+```typescript
+// Guest data structure in localStorage
+spanish-tutor-guest-learner-profile: LearnerProfile
+spanish-tutor-guest-conversations: GuestConversation[]
+spanish-tutor-guest-progress: GuestProgress
+```
 
 ### Student Conversation Analysis Research
 
@@ -282,6 +373,27 @@ model: 'gpt-4o-mini'  // ✅ CORRECT - Cost effective
 - Values understanding "why" before "how"
 - Appreciates pros/cons discussion
 - Wants to maintain control over code changes
+
+## Authentication Architecture (Updated February 2025)
+
+### Current Implementation
+- **Middleware**: `/src/middleware.ts` using `@supabase/ssr`
+- **Auth Context**: `/src/contexts/AuthContext.tsx` wraps the app
+- **Protected Routes**: Middleware handles `/practice/*` protection
+- **Guest Routes**: `/practice-no-auth` and `/adaptive-practice` bypass auth
+
+### Security Best Practices Implemented
+1. **Never trust `getSession()`** in server code - always use `getUser()`
+2. **Cookie management** uses only `getAll/setAll` methods
+3. **Ephemeral keys** for OpenAI WebRTC connections
+4. **RLS policies** on all Supabase tables
+
+### Auth Flow
+```
+User → Middleware → getUser() → Route Protection
+  ↓                                ↓
+Guest → practice-no-auth    Auth → practice/adaptive-practice
+```
 
 ## Code Organization Principles
 
@@ -357,12 +469,12 @@ During investigation of why the practice page wouldn't load while simple tests w
 - These bypass the broken infrastructure and connect directly to OpenAI
 - Users can practice Spanish conversations immediately
 
-**Phase 2: Fix Critical Imports** (Next)
+**Phase 2: Fix Critical Imports** ✅ (COMPLETE)
 - Fix type imports in `src/types/index.ts` 
 - Install missing dependencies
 - Ensure practice page can at least load
 
-**Phase 3: Complete Supabase Migration** (Future)
+**Phase 3: Complete Supabase Migration** ✅ (COMPLETE - February 2025)
 - Update all API routes to use Supabase instead of NextAuth
 - Remove all Prisma references
 - Consolidate database operations
@@ -383,3 +495,198 @@ Use `/practice-no-auth` or `/simple-practice` for Spanish practice. These pages:
 - Connect reliably to OpenAI Realtime API
 
 The original practice page can be fixed later once the auth/database migration is completed.
+
+## Adaptive Learning Implementation Status (February 2025)
+
+### Phase 1: Foundation Solidification ✅ COMPLETE
+
+**What We Built:**
+1. **Enhanced Comprehension Detection**
+   - Fixed broken Spanish recognition (e.g., "Cuánto cuesta" now properly detected)
+   - Added Mexican cultural expressions (órale, güero, simón, chido, etc.)
+   - Implemented confidence scoring with Spanish usage bonus
+   - Detects both confusion indicators and understanding markers
+
+2. **Dynamic AI Behavior Adaptation**
+   - Connected comprehension detection to instruction updates
+   - AI now switches between "Spanish Focus" and "Bilingual Helper" modes
+   - Real-time adaptation based on user struggle/success patterns
+   - Implements CLT principles: communication > grammar perfection
+
+3. **Rich Vocabulary Tracking**
+   - Tracks 60+ Mexican Spanish words and phrases
+   - Recognizes diminutives (taquitos, salsita, ahorita)
+   - Handles multi-word phrases ("con todo", "para llevar")
+   - Distinguishes mastered vocabulary from struggle areas
+
+4. **Persistent Learning Patterns**
+   - User adaptations save/load from Supabase
+   - Tracks common errors and mastered concepts
+   - Learning profile persists across sessions
+   - Database layer fully tested and working
+
+5. **CLT Pedagogical Integration**
+   - Error tolerance scales with learner level
+   - Task-based goals (successfully order tacos)
+   - Natural code-switching patterns (60/40 for beginners)
+   - Cultural authenticity with Mexican expressions
+
+**Key Code Improvements:**
+```typescript
+// Before: Basic word matching
+detectComprehension(text) // → binary yes/no
+
+// After: Nuanced analysis
+detectComprehension(text) // → {
+  understood: true,
+  confidence: 0.75,
+  indicators: ['cuánto', 'cuesta', 'tacos']
+}
+
+// Before: Static AI personality
+instructions: "You are a taco vendor..."
+
+// After: Dynamic adaptation
+generateAdaptivePrompt(persona, situation, learnerProfile)
+// → Personalized instructions based on user's current needs
+```
+
+### Phase 2: Hidden Analysis System ✅ COMPLETE
+
+**What We Built:**
+1. **AI Prompt Enhancement**
+   - Added hidden analysis instructions to generateAdaptivePrompt()
+   - AI now includes `<!--ANALYSIS:pronunciation=X,fluency=Y,errors=[...],strengths=[...],confidence=Z-->` after responses
+   - Analysis completely invisible to users
+
+2. **Analysis Extraction System**
+   - extractHiddenAnalysis() function parses and strips comments
+   - Clean text displayed to user, analysis data processed separately
+   - Handles malformed analysis gracefully with fallbacks
+
+3. **Dynamic Profile Updates**
+   - updateProfileFromAnalysis() enriches learner profile with pronunciation/fluency metrics
+   - Running average confidence calculation (70% weight on history, 30% new)
+   - Automatic level progression based on fluency and confidence
+   - Error patterns tracked as struggling words
+
+4. **Real-time UI Feedback**
+   - Live pronunciation indicator (poor→fair→good→excellent)
+   - Fluency progression display (halting→developing→conversational→fluent)
+   - Confidence meter with percentage display
+   - All updates happen transparently during conversation
+
+**Key Technical Details:**
+```typescript
+// Analysis format in AI responses:
+"¡Órale! Dos tacos de pastor, very good choice!"
+<!--ANALYSIS:pronunciation=good,fluency=developing,errors=[gender_agreement],strengths=[food_vocabulary;ordering_phrases],confidence=0.7-->
+
+// Extracted and displayed as:
+"¡Órale! Dos tacos de pastor, very good choice!"
+
+// While updating profile with:
+{
+  pronunciation: 'good',
+  fluency: 'developing',
+  averageConfidence: 0.65,
+  strugglingWords: [...prev, 'gender_agreement'],
+  masteredPhrases: [...prev, 'food_vocabulary', 'ordering_phrases']
+}
+```
+
+### Phase 3: Intelligent Error Tolerance 📅 UPCOMING
+
+**Planned Features:**
+- Distinguish error types (grammar vs pronunciation vs vocabulary)
+- Context-aware correction strategies
+- Recast corrections vs direct feedback
+- Cultural appropriateness prioritization
+
+### Phase 3: Authentication & Persistence ✅ COMPLETE
+
+**What We Built:**
+1. **Modern Auth System** - Removed NextAuth, implemented Supabase SSR
+2. **Guest Mode** - Full localStorage-based practice for non-authenticated users
+3. **Unified Storage** - Single API for both guest and authenticated data
+4. **Migration Path** - Automatic guest→user data transfer on signup
+
+### Phase 3.5: Smart Adaptation System ✅ COMPLETE
+
+**Problem Identified:**
+The 30-second cooldown between mode switches was too conservative and artificial:
+- Prevented natural learning flow when users improved quickly
+- Created frustrating delays when immediate adaptation was needed
+- Time-based restrictions don't match real conversation dynamics
+
+**Solution Implemented:**
+Replaced time-based cooldown with **consecutive confirmation system**:
+
+```typescript
+// Old: Time-based cooldown (artificial delay)
+const ADAPTATION_COOLDOWN_MS = 30000; // 30 seconds
+if (timeSinceLastAdaptation >= ADAPTATION_COOLDOWN_MS) { /* adapt */ }
+
+// New: Consecutive tracking (natural confirmation)
+const REQUIRED_CONFIRMATIONS = 2; // Need 2 consecutive confirmations
+if (consecutiveFailures >= REQUIRED_CONFIRMATIONS) { /* switch to helper */ }
+if (consecutiveSuccesses >= REQUIRED_CONFIRMATIONS) { /* switch to Spanish */ }
+```
+
+**How It Works:**
+- **Struggling → Helper Mode**: After 2 consecutive low-confidence responses (< 0.3)
+- **Succeeding → Spanish Mode**: After 2 consecutive high-confidence responses (> 0.7)
+- **Natural Feel**: Responds immediately when users demonstrate consistent patterns
+- **No Artificial Delays**: Mode switches happen as soon as evidence is clear
+
+**Benefits:**
+1. **Responsive**: Quick adaptation when users clearly need help or are ready to advance
+2. **Stable**: Prevents single outlier responses from causing mode switches
+3. **Natural**: Matches real conversation dynamics better than arbitrary time limits
+4. **Better UX**: No frustrating waits when users are clearly struggling or succeeding
+
+### Current Development Status
+
+**Completed Phases:** 3 of 6 (50% complete)
+- ✅ Phase 1: Adaptive Learning Foundation
+- ✅ Phase 2: Hidden Analysis System
+- ✅ Phase 3: Authentication & Persistence
+- 🔄 Phase 3.5: Cleanup and Review (Current)
+- 📅 Phase 4: Scenario Progression System
+- 📅 Phase 5: Enhanced Analytics Dashboard
+- 📅 Phase 6: Production Readiness
+
+### Phase 4: Scenario Progression 📅 FUTURE
+
+**Planned Features:**
+- Multiple scenarios (taco stand → market → hotel)
+- Difficulty progression based on performance
+- Unlock system for advanced scenarios
+- Cross-scenario vocabulary retention
+
+### Current Testing Status
+
+**Working Pages:**
+- `/practice-no-auth` - Full features without authentication ✅
+- `/simple-practice` - Minimal testing version ✅
+- `/practice` - Requires auth (currently redirects to login)
+
+**Database Status:**
+- Supabase tables created and accessible ✅
+- RLS policies require authentication (correct security) ✅
+- Service functions tested and working ✅
+
+**Known Issues:**
+- Main practice page requires full authentication
+- Adaptation persistence only works for authenticated users
+- Some UI elements need polish for production
+
+### Incremental Development Philosophy
+
+We're following a careful, test-driven approach:
+1. **Small bites**: Each phase adds one major feature
+2. **Adequate testing**: Every feature tested before moving on
+3. **User-centric**: Focus on learning experience over technical complexity
+4. **Pedagogically sound**: CLT/TBLL principles guide all decisions
+
+The adaptive learning system is now functional at a basic level. Users experience real-time AI adaptation based on their comprehension, with persistence across sessions for authenticated users.
