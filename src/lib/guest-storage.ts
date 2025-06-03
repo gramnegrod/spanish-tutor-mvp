@@ -1,7 +1,7 @@
 /**
- * Session Storage utilities for guest users
- * Provides temporary data persistence for non-authenticated users
- * Data is isolated per tab/session and automatically cleared when tab closes
+ * Local Storage utilities for guest users
+ * Provides persistent data storage for non-authenticated users
+ * Data persists across browser sessions and tabs until explicitly cleared
  */
 
 import { LearnerProfile } from '@/lib/pedagogical-system';
@@ -30,7 +30,7 @@ export class GuestStorageService {
   // Learner Profile Storage
   static saveLearnerProfile(profile: LearnerProfile): void {
     try {
-      sessionStorage.setItem(
+      localStorage.setItem(
         `${GUEST_STORAGE_PREFIX}learner-profile`,
         JSON.stringify(profile)
       );
@@ -41,7 +41,7 @@ export class GuestStorageService {
   
   static getLearnerProfile(): LearnerProfile | null {
     try {
-      const stored = sessionStorage.getItem(`${GUEST_STORAGE_PREFIX}learner-profile`);
+      const stored = localStorage.getItem(`${GUEST_STORAGE_PREFIX}learner-profile`);
       return stored ? JSON.parse(stored) : null;
     } catch (error) {
       console.warn('[GuestStorage] Failed to load learner profile:', error);
@@ -58,7 +58,7 @@ export class GuestStorageService {
       // Keep only last 10 conversations for performance
       const recentConversations = conversations.slice(-10);
       
-      sessionStorage.setItem(
+      localStorage.setItem(
         `${GUEST_STORAGE_PREFIX}conversations`,
         JSON.stringify(recentConversations)
       );
@@ -69,7 +69,7 @@ export class GuestStorageService {
   
   static getConversations(): GuestConversation[] {
     try {
-      const stored = sessionStorage.getItem(`${GUEST_STORAGE_PREFIX}conversations`);
+      const stored = localStorage.getItem(`${GUEST_STORAGE_PREFIX}conversations`);
       return stored ? JSON.parse(stored) : [];
     } catch (error) {
       console.warn('[GuestStorage] Failed to load conversations:', error);
@@ -80,7 +80,7 @@ export class GuestStorageService {
   // Progress Storage
   static saveProgress(progress: GuestProgress): void {
     try {
-      sessionStorage.setItem(
+      localStorage.setItem(
         `${GUEST_STORAGE_PREFIX}progress`,
         JSON.stringify(progress)
       );
@@ -91,7 +91,7 @@ export class GuestStorageService {
   
   static getProgress(): GuestProgress {
     try {
-      const stored = sessionStorage.getItem(`${GUEST_STORAGE_PREFIX}progress`);
+      const stored = localStorage.getItem(`${GUEST_STORAGE_PREFIX}progress`);
       if (stored) {
         return JSON.parse(stored);
       }
@@ -129,10 +129,10 @@ export class GuestStorageService {
   
   static clearGuestData(): void {
     try {
-      const keys = Object.keys(sessionStorage).filter(key => 
+      const keys = Object.keys(localStorage).filter(key => 
         key.startsWith(GUEST_STORAGE_PREFIX)
       );
-      keys.forEach(key => sessionStorage.removeItem(key));
+      keys.forEach(key => localStorage.removeItem(key));
       console.log('[GuestStorage] Cleared guest data');
     } catch (error) {
       console.warn('[GuestStorage] Failed to clear guest data:', error);
@@ -142,9 +142,9 @@ export class GuestStorageService {
   // Utility to check storage usage
   static getStorageInfo() {
     try {
-      const profile = sessionStorage.getItem(`${GUEST_STORAGE_PREFIX}learner-profile`);
-      const conversations = sessionStorage.getItem(`${GUEST_STORAGE_PREFIX}conversations`);
-      const progress = sessionStorage.getItem(`${GUEST_STORAGE_PREFIX}progress`);
+      const profile = localStorage.getItem(`${GUEST_STORAGE_PREFIX}learner-profile`);
+      const conversations = localStorage.getItem(`${GUEST_STORAGE_PREFIX}conversations`);
+      const progress = localStorage.getItem(`${GUEST_STORAGE_PREFIX}progress`);
       
       const totalSize = (profile?.length || 0) + 
                        (conversations?.length || 0) + 

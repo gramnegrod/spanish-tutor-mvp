@@ -62,19 +62,33 @@ ALWAYS do comprehensive analysis for:
 ## Project Overview
 A Spanish learning application using OpenAI's Realtime API for voice-based conversations with an AI tutor.
 
+## Current Status (June 2025)
+- **Phase 3.5 COMPLETE**: Enhanced progress feedback with real-time adaptation visible to users
+- **Architecture**: Fully migrated to Supabase (auth + database)
+- **Features**: Smart adaptation, comprehension detection, session analytics
+- **Ready for**: Phase 4 - Scenario Progression System
+
 ## Current Architecture
 
 ### Core Technology
 - **Next.js 15** with TypeScript
 - **OpenAI Realtime API** via WebRTC (not WebSocket!)
 - **Ephemeral key generation** for secure client connections
+- **Supabase**: Authentication and database (fully migrated)
+- **Guest Mode**: localStorage-based practice without signup
 
 ### Key Learning: WebRTC vs WebSocket
 - ❌ WebSocket approach fails due to browser header restrictions
 - ✅ WebRTC with ephemeral keys is the correct approach
 - Server generates temporary tokens, client uses WebRTC connection
 
-### Recent Architecture Changes (2025-01-29)
+### Recent Architecture Changes (June 2025)
+- **Phase 3.5 Complete**: Enhanced real-time progress feedback system
+- **Guest Storage Fixed**: Now uses localStorage instead of sessionStorage
+- **Component Lifecycle**: Standardized disconnectRef pattern across pages
+- **Hidden Analysis**: Verified working with AI comment embedding
+
+### Previous Architecture Changes (January 2025)
 - **Removed all WebSocket implementations** - Standardized on WebRTC approach
 - **Deleted files:**
   - `/src/lib/openai-realtime.ts` (WebSocket implementation)
@@ -162,12 +176,13 @@ npm run dev
 # Working practice pages (use these!):
 # http://localhost:3000/practice-no-auth     - Full featured guest mode with progress tracking
 # http://localhost:3000/adaptive-practice    - Structured scenarios (requires auth)
-# http://localhost:3000/practice             - Main practice (requires auth, fixed!)
+# http://localhost:3000/practice             - Main practice (requires auth) ✅ WORKING
 # http://localhost:3000/simple-practice      - Minimal test version
 
 # Test pages for debugging:
 # http://localhost:3000/minimal-test.html    - Minimal WebRTC connection test
 # http://localhost:3000/test-realtime        - React component test
+# http://localhost:3000/test-hidden-analysis - Test hidden analysis extraction
 ```
 
 ## Important Notes
@@ -190,8 +205,9 @@ npm run dev
 - ✅ ~~Main `/practice` page broken~~ - FIXED in Phase 3
 - ✅ ~~API routes expect NextAuth~~ - FIXED, now use Supabase
 - ✅ ~~Type imports reference Prisma~~ - FIXED, cleaned up
-- 🔧 Environment variables for API keys still need proper setup
-- 🔧 Some API routes still use hardcoded keys (temporary workaround)
+- ✅ ~~Guest storage uses sessionStorage~~ - FIXED, now uses localStorage
+- ✅ ~~Component lifecycle inconsistent~~ - FIXED, standardized pattern
+- ✅ ~~Hidden analysis uncertain~~ - VERIFIED working
 
 ## OpenAI Model Reference (Updated January 2025)
 
@@ -229,15 +245,15 @@ model: 'gpt-4o-mini'  // ✅ CORRECT - Cost effective
 - `gpt-4o-mini-tts` - Text-to-speech ($0.015/minute)
 - `whisper-1` - Legacy transcription (some prefer over new models)
 
-## Current Migration Status (January 2025)
+## Current Migration Status (June 2025)
 
-### Migration to Full Supabase - In Progress
+### Migration to Full Supabase - ✅ COMPLETE
 
 #### Current State:
 - **Auth**: Supabase Auth fully working (login, register, magic links)
-- **Database**: Mixed state - Prisma configured but not synced with Supabase users
-- **API Routes**: Broken - expecting NextAuth sessions but getting Supabase auth
-- **Conversation Analysis**: Failing - expects audio files that don't exist
+- **Database**: Fully migrated to Supabase with proper RLS policies
+- **API Routes**: All updated to use Supabase auth and database
+- **Conversation Analysis**: Working with text-based analysis
 
 #### ✅ COMPLETE: Phase 3 - Authentication & Persistence (February 2025)
 - **Removed NextAuth**: Deleted all NextAuth remnants, fixed type imports
@@ -246,34 +262,13 @@ model: 'gpt-4o-mini'  // ✅ CORRECT - Cost effective
 - **Unified Storage**: Created `UnifiedStorageService` for seamless auth/guest handling
 - **Build Success**: Fixed all TypeScript errors, all pages building correctly
 
-#### Migration Plan:
-
-**Phase 1: Supabase Database Setup** ⏳ (Next Step)
+#### Database Structure Implemented:
 ```sql
--- Tables needed:
-- conversations (user_id, title, transcript, duration, analysis)
-- progress (user_id, vocabulary, pronunciation, grammar, fluency)
-- user_adaptations (user_id, pace, common_errors, mastered_concepts)
+-- Tables created:
+- conversations (user_id, title, transcript, duration, analysis, created_at)
+- progress (user_id, vocabulary, pronunciation, grammar, fluency, conversations_completed, total_minutes_practiced)
+- user_adaptations (user_id, pace, common_errors, mastered_concepts, struggle_areas)
 ```
-
-**Phase 2: Fix Conversation Analysis** 🔧
-- Remove audio recording requirement for MVP
-- Use text transcripts directly from Realtime API
-- Simplify to text-only analysis with GPT-4.1
-- Audio analysis can be added later as "Pro" feature
-
-**Phase 3: Create Supabase Service Layer**
-- `/lib/supabase-db.ts` for all database operations
-- Type-safe queries with proper error handling
-
-**Phase 4: Update API Routes**
-- `/api/conversations` → Use Supabase instead of Prisma
-- `/api/analyze` → Text-only analysis
-- `/api/progress` → Supabase progress tracking
-
-**Phase 5: Clean Up**
-- Remove: NextAuth, Prisma, mock-db files
-- Update: package.json, environment variables
 
 ### Text-Only Analysis (MVP Approach)
 
@@ -301,7 +296,7 @@ model: 'gpt-4o-mini'  // ✅ CORRECT - Cost effective
 ### Guest Mode Implementation (MVP Enhancement)
 
 **Architecture Overview:**
-- **GuestStorageService** (`/src/lib/guest-storage.ts`) - localStorage management
+- **GuestStorageService** (`/src/lib/guest-storage.ts`) - localStorage management ✅ FIXED
 - **UnifiedStorageService** (`/src/lib/unified-storage.ts`) - Unified API for auth/guest
 - **Migration Ready** - Automatic guest→user data transfer on signup
 
@@ -595,14 +590,6 @@ generateAdaptivePrompt(persona, situation, learnerProfile)
 }
 ```
 
-### Phase 3: Intelligent Error Tolerance 📅 UPCOMING
-
-**Planned Features:**
-- Distinguish error types (grammar vs pronunciation vs vocabulary)
-- Context-aware correction strategies
-- Recast corrections vs direct feedback
-- Cultural appropriateness prioritization
-
 ### Phase 3: Authentication & Persistence ✅ COMPLETE
 
 **What We Built:**
@@ -645,13 +632,38 @@ if (consecutiveSuccesses >= REQUIRED_CONFIRMATIONS) { /* switch to Spanish */ }
 3. **Natural**: Matches real conversation dynamics better than arbitrary time limits
 4. **Better UX**: No frustrating waits when users are clearly struggling or succeeding
 
+### Phase 3.5 Enhancement: Real-time Progress Feedback ✅ COMPLETE
+
+**What We Added:**
+1. **Live Comprehension Feedback**
+   - Color-coded confidence indicators after each response
+   - Real-time feedback messages ("¡Excelente!", "Keep trying!")
+   - Confidence percentage display
+
+2. **Session Statistics Tracking**
+   - Live exchange counter
+   - Success rate percentage
+   - Streak tracking (with 🔥 indicator)
+   - Improvement trend analysis
+
+3. **Adaptation Progress Visualization**
+   - Progress bars showing steps to mode switch
+   - Clear notifications when adaptation occurs
+   - Explanatory messages for AI behavior changes
+
+4. **Enhanced Session Summaries**
+   - Detailed performance metrics
+   - Vocabulary mastered count
+   - Practice duration
+   - Personalized encouragement
+
 ### Current Development Status
 
-**Completed Phases:** 3 of 6 (50% complete)
+**Completed Phases:** 3.5 of 6 (58% complete)
 - ✅ Phase 1: Adaptive Learning Foundation
 - ✅ Phase 2: Hidden Analysis System
 - ✅ Phase 3: Authentication & Persistence
-- 🔄 Phase 3.5: Cleanup and Review (Current)
+- ✅ Phase 3.5: Enhanced Progress Feedback
 - 📅 Phase 4: Scenario Progression System
 - 📅 Phase 5: Enhanced Analytics Dashboard
 - 📅 Phase 6: Production Readiness
@@ -667,19 +679,29 @@ if (consecutiveSuccesses >= REQUIRED_CONFIRMATIONS) { /* switch to Spanish */ }
 ### Current Testing Status
 
 **Working Pages:**
-- `/practice-no-auth` - Full features without authentication ✅
+- `/practice-no-auth` - Full features with all enhancements ✅
 - `/simple-practice` - Minimal testing version ✅
-- `/practice` - Requires auth (currently redirects to login)
+- `/practice` - Full features for authenticated users ✅
+- `/adaptive-practice` - Structured scenarios ✅
+- `/test-hidden-analysis` - Hidden analysis testing ✅
 
 **Database Status:**
 - Supabase tables created and accessible ✅
 - RLS policies require authentication (correct security) ✅
 - Service functions tested and working ✅
+- Automatic timestamps and indexes configured ✅
 
 **Known Issues:**
-- Main practice page requires full authentication
-- Adaptation persistence only works for authenticated users
-- Some UI elements need polish for production
+- ✅ All major issues resolved
+- Ready for Phase 4 implementation
+
+### Recent Bug Fixes (June 2025)
+
+1. **Guest Storage**: Changed from sessionStorage to localStorage
+2. **Component Lifecycle**: Standardized disconnectRef pattern
+3. **Hidden Analysis**: Verified AI comment embedding works
+4. **Feature Parity**: Both guest and auth pages have identical features
+5. **TypeScript Errors**: All build errors resolved
 
 ### Incremental Development Philosophy
 
@@ -689,4 +711,4 @@ We're following a careful, test-driven approach:
 3. **User-centric**: Focus on learning experience over technical complexity
 4. **Pedagogically sound**: CLT/TBLL principles guide all decisions
 
-The adaptive learning system is now functional at a basic level. Users experience real-time AI adaptation based on their comprehension, with persistence across sessions for authenticated users.
+The adaptive learning system is now fully functional with real-time visual feedback. Users can see their progress, understand AI adaptations, and track their improvement throughout each session. The system works for both guest and authenticated users with full feature parity.
