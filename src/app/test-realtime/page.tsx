@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useOpenAIRealtime } from '@/hooks/useOpenAIRealtime';
+import { safeFormatTime } from '@/lib/utils';
 
 export default function TestRealtimePage() {
   const [transcripts, setTranscripts] = useState<Array<{ role: 'user' | 'assistant'; text: string; timestamp: Date }>>([]);
@@ -195,7 +196,7 @@ export default function TestRealtimePage() {
                       {transcript.role === 'assistant' ? '🤖 Assistant' : '👤 You'}
                     </span>
                     <span className="text-xs text-gray-500">
-                      {transcript.timestamp.toLocaleTimeString()}
+                      {safeFormatTime(transcript.timestamp)}
                     </span>
                   </div>
                   <p className="text-gray-800">{transcript.text}</p>

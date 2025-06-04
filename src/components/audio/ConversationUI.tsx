@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { User, Bot } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, safeFormatTime } from '@/lib/utils'
 import { ConversationTranscript } from '@/types'
 
 interface ConversationUIProps {
@@ -61,7 +61,7 @@ export function ConversationUI({
             >
               <p className="text-sm">{transcript.text}</p>
               <p className="text-xs mt-1 opacity-70">
-                {new Date(transcript.timestamp).toLocaleTimeString()}
+                {safeFormatTime(transcript.timestamp)}
               </p>
             </div>
 

@@ -64,6 +64,16 @@ export function useOpenAIRealtime(options: UseOpenAIRealtimeOptions = {}): UseOp
   const audioRef = useRef<HTMLAudioElement>(null);
   const serviceRef = useRef<OpenAIRealtimeService | null>(null);
   
+  // Use refs to avoid stale closures for dynamic callbacks
+  const onTranscriptRef = useRef(options.onTranscript);
+  const onErrorRef = useRef(options.onError);
+  const onCostUpdateRef = useRef(options.onCostUpdate);
+  
+  // Update refs when options change
+  onTranscriptRef.current = options.onTranscript;
+  onErrorRef.current = options.onError;
+  onCostUpdateRef.current = options.onCostUpdate;
+  
   // Initialize service
   useEffect(() => {
     // Clean initialization
@@ -90,7 +100,8 @@ export function useOpenAIRealtime(options: UseOpenAIRealtimeOptions = {}): UseOp
         setError(err instanceof Error ? err : new Error(String(err)));
         setIsConnecting(false);
         setStatus(`Error: ${err.message}`);
-        options.onError?.(err);
+        console.log('[useOpenAIRealtime] Calling onError via ref');
+        onErrorRef.current?.(err);
       },
       onSpeechStart: () => {
         setIsSpeaking(true);
@@ -101,14 +112,15 @@ export function useOpenAIRealtime(options: UseOpenAIRealtimeOptions = {}): UseOp
         setStatus('Processing...');
       },
       onTranscript: (role, text) => {
-        options.onTranscript?.(role, text);
+        console.log('[useOpenAIRealtime] onTranscript called:', { role, text: text.substring(0, 50) + '...', hasCallback: !!onTranscriptRef.current });
+        onTranscriptRef.current?.(role, text);
         if (role === 'assistant') {
           setStatus('Ready');
         }
       },
       onCostUpdate: (costData) => {
         setCosts(costData);
-        options.onCostUpdate?.(costData);
+        onCostUpdateRef.current?.(costData);
       },
       onTimeWarning: (minutesLeft, totalCost) => {
         setTimeWarningMinutes(minutesLeft);

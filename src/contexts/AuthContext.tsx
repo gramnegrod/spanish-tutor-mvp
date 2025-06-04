@@ -63,9 +63,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('[AuthContext] Auth state change:', event, !!session?.user)
       setUser(session?.user ?? null)
       
-      // Handle redirects after authentication
+      // Handle redirects after authentication - only redirect from login/register pages
       if (event === 'SIGNED_IN' && session?.user) {
-        router.push('/practice')
+        const currentPath = window.location.pathname;
+        // Only redirect if user is coming from auth pages
+        if (currentPath === '/login' || currentPath === '/register' || currentPath === '/') {
+          router.push('/practice')
+        }
+        // Let users stay on other pages (dashboard, adventures, etc.)
       }
     })
 

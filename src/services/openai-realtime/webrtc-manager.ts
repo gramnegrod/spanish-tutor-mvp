@@ -8,12 +8,17 @@ export class WebRTCManager {
   private pc: RTCPeerConnection | null = null;
   private dc: RTCDataChannel | null = null;
   private config: RealtimeConfig;
+  private onConnectionError?: (error: Error) => void;
 
   constructor(config: RealtimeConfig) {
     this.config = config;
   }
 
-  async connect(): Promise<{ pc: RTCPeerConnection; dc: RTCDataChannel }> {
+  setErrorHandler(handler: (error: Error) => void): void {
+    this.onConnectionError = handler;
+  }
+
+  async connect(mediaStream?: MediaStream, onTrackHandler?: (e: RTCTrackEvent) => void): Promise<{ pc: RTCPeerConnection; dc: RTCDataChannel }> {
     console.log('[WebRTCManager] Starting connection process...');
     
     // Get ephemeral token
@@ -39,13 +44,28 @@ export class WebRTCManager {
     this.pc.onconnectionstatechange = () => {
       console.log('[WebRTCManager] Connection state changed:', this.pc?.connectionState);
       if (this.pc?.connectionState === 'failed') {
-        throw new Error('WebRTC connection failed');
+        const error = new Error('WebRTC connection failed');
+        console.error('[WebRTCManager] Connection failed:', error);
+        if (this.onConnectionError) {
+          this.onConnectionError(error);
+        }
+      } else if (this.pc?.connectionState === 'disconnected') {
+        console.log('[WebRTCManager] Connection disconnected');
+      } else if (this.pc?.connectionState === 'connected') {
+        console.log('[WebRTCManager] Connection established successfully');
       }
     };
     
     // Monitor ICE connection state
     this.pc.oniceconnectionstatechange = () => {
       console.log('[WebRTCManager] ICE connection state:', this.pc?.iceConnectionState);
+      if (this.pc?.iceConnectionState === 'failed' || this.pc?.iceConnectionState === 'disconnected') {
+        const error = new Error(`ICE connection ${this.pc.iceConnectionState}. Check network connectivity.`);
+        console.error('[WebRTCManager] ICE connection issue:', error);
+        if (this.onConnectionError) {
+          this.onConnectionError(error);
+        }
+      }
     };
     
     // Monitor ICE gathering state
@@ -53,10 +73,29 @@ export class WebRTCManager {
       console.log('[WebRTCManager] ICE gathering state:', this.pc?.iceGatheringState);
     };
     
+    // Set up track handler if provided
+    if (onTrackHandler) {
+      console.log('[WebRTCManager] Setting up ontrack handler');
+      this.pc.ontrack = onTrackHandler;
+    }
+    
+    // Add microphone track BEFORE creating offer
+    if (mediaStream) {
+      const audioTrack = mediaStream.getAudioTracks()[0];
+      if (audioTrack) {
+        console.log('[WebRTCManager] Adding microphone track to peer connection');
+        this.pc.addTrack(audioTrack, mediaStream);
+      } else {
+        console.warn('[WebRTCManager] No audio track found in media stream');
+      }
+    } else {
+      console.warn('[WebRTCManager] No media stream provided');
+    }
+    
     // Create data channel
     this.dc = this.pc.createDataChannel('oai-events');
     
-    // Create and send offer
+    // Create and send offer (now with audio track)
     console.log('[WebRTCManager] Creating WebRTC offer...');
     const offer = await this.pc.createOffer();
     await this.pc.setLocalDescription(offer);
@@ -124,11 +163,16 @@ export class WebRTCManager {
     };
   }
 
-  addTrack(track: MediaStreamTrack): void {
+  addTrack(track: MediaStreamTrack, stream?: MediaStream): void {
     if (!this.pc) {
       throw new Error('Peer connection not initialized');
     }
-    this.pc.addTrack(track);
+    if (stream) {
+      this.pc.addTrack(track, stream);
+    } else {
+      // Legacy fallback
+      this.pc.addTrack(track);
+    }
   }
 
   setOnTrack(handler: (e: RTCTrackEvent) => void): void {

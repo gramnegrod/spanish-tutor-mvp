@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/types'
 import { Mic, LogOut, Trophy, Calendar } from 'lucide-react'
-import { formatDuration } from '@/lib/utils'
+import { formatDuration, safeFormatDate } from '@/lib/utils'
 
 export default function DashboardPage() {
   const { user, loading, signOut } = useAuth()
@@ -81,27 +81,51 @@ export default function DashboardPage() {
         </div>
 
         {/* Quick Actions */}
-        <Card className="bg-gradient-to-r from-green-500 to-green-600 text-white">
-          <CardContent className="p-8">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-bold mb-2">Start Practicing</h2>
-                <p className="text-green-100">
-                  Jump into a conversation with our friendly Taquero
-                </p>
+        <div className="grid md:grid-cols-2 gap-4">
+          <Card className="bg-gradient-to-r from-green-500 to-green-600 text-white">
+            <CardContent className="p-8">
+              <div className="flex flex-col h-full">
+                <div className="flex-1">
+                  <h2 className="text-2xl font-bold mb-2">Quick Practice</h2>
+                  <p className="text-green-100">
+                    Jump into a conversation with our friendly Taquero
+                  </p>
+                </div>
+                <Button 
+                  size="lg" 
+                  variant="secondary"
+                  onClick={() => router.push('/practice')}
+                  className="bg-white text-green-600 hover:bg-gray-100 mt-4 w-full"
+                >
+                  <Mic className="h-5 w-5 mr-2" />
+                  Start Conversation
+                </Button>
               </div>
-              <Button 
-                size="lg" 
-                variant="secondary"
-                onClick={() => router.push('/practice')}
-                className="bg-white text-green-600 hover:bg-gray-100"
-              >
-                <Mic className="h-5 w-5 mr-2" />
-                Start Conversation
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-r from-orange-500 to-red-500 text-white">
+            <CardContent className="p-8">
+              <div className="flex flex-col h-full">
+                <div className="flex-1">
+                  <h2 className="text-2xl font-bold mb-2">🇲🇽 Mexico City Adventure</h2>
+                  <p className="text-orange-100">
+                    Complete journey through 11 authentic conversations
+                  </p>
+                </div>
+                <Button 
+                  size="lg" 
+                  variant="secondary"
+                  onClick={() => router.push('/mexico-city-adventure')}
+                  className="bg-white text-orange-600 hover:bg-gray-100 mt-4 w-full"
+                >
+                  <Mic className="h-5 w-5 mr-2" />
+                  Start Adventure
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Stats Grid */}
         <div className="grid md:grid-cols-2 gap-6">
@@ -133,7 +157,7 @@ export default function DashboardPage() {
                       <div>
                         <p className="font-medium">{conversation.title}</p>
                         <p className="text-sm text-gray-600">
-                          {new Date(conversation.createdAt).toLocaleDateString()}
+                          {safeFormatDate(conversation.createdAt)}
                         </p>
                       </div>
                       <div className="text-right">

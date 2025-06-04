@@ -90,15 +90,15 @@ export class OpenAIRealtimeService {
       this.updateStatus('Requesting microphone access...');
       const mediaStream = await this.audioManager.setupAudio(audioElement);
       
-      // Setup WebRTC connection
+      // Setup WebRTC error handling
+      this.webrtcManager.setErrorHandler((error) => {
+        console.error('[OpenAIRealtimeService] WebRTC error:', error);
+        this.handleError(error);
+      });
+      
+      // Setup WebRTC connection (now includes microphone track AND ontrack handler)
       this.updateStatus('Creating connection...');
-      const { pc, dc } = await this.webrtcManager.connect();
-      
-      // Add microphone track
-      this.webrtcManager.addTrack(mediaStream.getTracks()[0]);
-      
-      // Set up audio playback
-      this.webrtcManager.setOnTrack((e) => {
+      const { pc, dc } = await this.webrtcManager.connect(mediaStream, (e) => {
         console.log('[OpenAIRealtimeService] Received audio track:', e.track.kind);
         if (e.track.kind === 'audio') {
           this.audioManager.setAudioStream(e.streams[0]);

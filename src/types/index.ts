@@ -68,7 +68,7 @@ export interface ConversationTranscript {
   id: string
   speaker: 'user' | 'assistant'
   text: string
-  timestamp: Date
+  timestamp: Date | string  // Allow both Date objects and ISO strings for serialization compatibility
   audioUrl?: string
 }
 

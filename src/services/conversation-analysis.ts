@@ -83,9 +83,21 @@ export class ConversationAnalysisService {
       return '';
     }
     
-    return transcripts.map(t => 
-      `${t.speaker.toUpperCase()}: ${t.text} (${new Date(t.timestamp).toLocaleTimeString()})`
-    ).join('\\n');
+    return transcripts.map(t => {
+      // Safe date formatting inline to avoid import issues
+      let timeStr = '--:--';
+      try {
+        if (t.timestamp) {
+          const dateObj = typeof t.timestamp === 'string' ? new Date(t.timestamp) : t.timestamp;
+          if (!isNaN(dateObj.getTime())) {
+            timeStr = dateObj.toLocaleTimeString();
+          }
+        }
+      } catch (error) {
+        console.warn('Error formatting timestamp in conversation analysis:', t.timestamp);
+      }
+      return `${t.speaker.toUpperCase()}: ${t.text} (${timeStr})`;
+    }).join('\\n');
   }
   
   // Perform text-based conversation analysis with GPT-4.1
