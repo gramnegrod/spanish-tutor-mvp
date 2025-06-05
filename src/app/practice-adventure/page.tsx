@@ -347,7 +347,7 @@ export default function PracticeAdventurePage() {
           </Button>
         </div>
 
-        {/* Scenario Info */}
+        {/* Combined Scenario Info & Progress */}
         <Card className="mb-6">
           <CardHeader>
             <CardTitle className="flex items-center gap-3">
@@ -364,33 +364,41 @@ export default function PracticeAdventurePage() {
                 {scenario.id === 'pharmacy' && '💊'}
                 {scenario.id === 'bus-ride' && '🚌'}
               </span>
-              <div>
+              <div className="flex-1">
                 <h1 className="text-2xl font-bold">{scenario.title}</h1>
                 <p className="text-gray-600">{scenario.location}</p>
+              </div>
+              <div className="text-right">
+                <div className="text-sm font-medium text-gray-700">Progress</div>
+                <div className="text-lg font-bold text-green-600">
+                  {isMounted ? Object.values(completionChecklist).filter(Boolean).length : 0}/4
+                </div>
               </div>
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid md:grid-cols-2 gap-4">
+            <div className="grid lg:grid-cols-3 gap-6">
+              {/* Character Info */}
               <div>
                 <h3 className="font-semibold mb-2">Meet {scenario.npc.name}</h3>
-                <p className="text-sm text-gray-600 mb-2">{scenario.npc.role}</p>
-                <p className="text-sm text-gray-700">{scenario.npc.personality}</p>
+                <p className="text-sm text-gray-600 mb-1">{scenario.npc.role}</p>
+                <p className="text-xs text-gray-700 mb-2">{scenario.npc.personality}</p>
                 
                 {/* Special accent notice for pharmacy scenario */}
                 {scenario.id === 'pharmacy' && (
-                  <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                    <div className="flex items-center gap-2 mb-1">
+                  <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded">
+                    <div className="flex items-center gap-1 mb-1">
                       <span className="text-blue-600">🇬🇧</span>
-                      <span className="text-sm font-medium text-blue-800">Character Note</span>
+                      <span className="text-xs font-medium text-blue-800">British Accent</span>
                     </div>
                     <p className="text-xs text-blue-700">
-                      This pharmacist is a British expat who speaks Spanish with a noticeable English accent. 
-                      You may notice pronunciation quirks like dropped R's - this is intentional character design!
+                      Intentional pronunciation quirks like dropped R's
                     </p>
                   </div>
                 )}
               </div>
+
+              {/* Learning Goals */}
               <div>
                 <h3 className="font-semibold mb-2">Learning Goals</h3>
                 <ul className="text-sm space-y-1">
@@ -402,136 +410,61 @@ export default function PracticeAdventurePage() {
                   ))}
                 </ul>
               </div>
+
+              {/* Quick Progress */}
+              <div>
+                <h3 className="font-semibold mb-2">Quick Progress</h3>
+                <div className="space-y-2">
+                  <div className={`flex items-center gap-2 text-sm ${completionChecklist.hasGreeted ? 'text-green-600' : 'text-gray-500'}`}>
+                    <span>{completionChecklist.hasGreeted ? '✅' : '⭕'}</span>
+                    <span>Greeting</span>
+                  </div>
+                  <div className={`flex items-center gap-2 text-sm ${completionChecklist.hasUsedKeyVocabulary ? 'text-green-600' : 'text-gray-500'}`}>
+                    <span>{completionChecklist.hasUsedKeyVocabulary ? '✅' : '⭕'}</span>
+                    <span>Key Words</span>
+                  </div>
+                  <div className={`flex items-center gap-2 text-sm ${completionChecklist.hasHadMeaningfulExchange ? 'text-green-600' : 'text-gray-500'}`}>
+                    <span>{completionChecklist.hasHadMeaningfulExchange ? '✅' : '⭕'}</span>
+                    <span>Conversation</span>
+                  </div>
+                  <div className={`flex items-center gap-2 text-sm ${completionChecklist.hasCompletedGoals ? 'text-green-600' : 'text-gray-500'}`}>
+                    <span>{completionChecklist.hasCompletedGoals ? '✅' : '⭕'}</span>
+                    <span>Goal Complete</span>
+                  </div>
+                </div>
+                
+                {/* Completion Status */}
+                {Object.values(completionChecklist).every(Boolean) && (
+                  <div className="mt-3 p-2 bg-green-100 border border-green-300 rounded text-center">
+                    <div className="text-green-800 font-bold text-sm">🎉 All Done!</div>
+                  </div>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Completion Checklist */}
+        {/* Conversation Display - Enhanced */}
         <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              📋 Conversation Goals
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center justify-between">
+              <span>Conversation with {scenario.npc.name}</span>
               <span className="text-sm font-normal text-gray-500">
-                ({isMounted ? Object.values(completionChecklist).filter(Boolean).length : 0}/4 completed)
+                {isMounted ? transcripts.length : 0} messages
               </span>
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-                <div className={`flex items-center gap-3 p-3 rounded-lg transition-all ${
-                completionChecklist.hasGreeted 
-                  ? 'bg-green-50 border border-green-200' 
-                  : 'bg-gray-50 border border-gray-200'
-              }`}>
-                <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
-                  completionChecklist.hasGreeted 
-                    ? 'bg-green-500 text-white' 
-                    : 'bg-gray-300 text-gray-600'
-                }`}>
-                  {completionChecklist.hasGreeted ? '✓' : '1'}
-                </div>
-                <div className="flex-1">
-                  <div className="font-medium">Greet {scenario.npc.name}</div>
-                  <div className="text-sm text-gray-600">Say "hola", "buenos días", or similar greeting</div>
-                </div>
-                {completionChecklist.hasGreeted && (
-                  <div className="text-green-500 font-bold">Done! ✓</div>
-                )}
-              </div>
-
-              <div className={`flex items-center gap-3 p-3 rounded-lg transition-all ${
-                completionChecklist.hasUsedKeyVocabulary 
-                  ? 'bg-green-50 border border-green-200' 
-                  : 'bg-gray-50 border border-gray-200'
-              }`}>
-                <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
-                  completionChecklist.hasUsedKeyVocabulary 
-                    ? 'bg-green-500 text-white' 
-                    : 'bg-gray-300 text-gray-600'
-                }`}>
-                  {completionChecklist.hasUsedKeyVocabulary ? '✓' : '2'}
-                </div>
-                <div className="flex-1">
-                  <div className="font-medium">Use Key Vocabulary</div>
-                  <div className="text-sm text-gray-600">
-                    Use words like: {scenario.vocabulary.essential.slice(0, 3).join(', ')}
-                  </div>
-                </div>
-                {completionChecklist.hasUsedKeyVocabulary && (
-                  <div className="text-green-500 font-bold">Done! ✓</div>
-                )}
-              </div>
-
-              <div className={`flex items-center gap-3 p-3 rounded-lg transition-all ${
-                completionChecklist.hasHadMeaningfulExchange 
-                  ? 'bg-green-50 border border-green-200' 
-                  : 'bg-gray-50 border border-gray-200'
-              }`}>
-                <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
-                  completionChecklist.hasHadMeaningfulExchange 
-                    ? 'bg-green-500 text-white' 
-                    : 'bg-gray-300 text-gray-600'
-                }`}>
-                  {completionChecklist.hasHadMeaningfulExchange ? '✓' : '3'}
-                </div>
-                <div className="flex-1">
-                  <div className="font-medium">Have a Conversation</div>
-                  <div className="text-sm text-gray-600">Exchange at least 3 messages back and forth</div>
-                </div>
-                {completionChecklist.hasHadMeaningfulExchange && (
-                  <div className="text-green-500 font-bold">Done! ✓</div>
-                )}
-              </div>
-
-              <div className={`flex items-center gap-3 p-3 rounded-lg transition-all ${
-                completionChecklist.hasCompletedGoals 
-                  ? 'bg-green-50 border border-green-200' 
-                  : 'bg-gray-50 border border-gray-200'
-              }`}>
-                <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
-                  completionChecklist.hasCompletedGoals 
-                    ? 'bg-green-500 text-white' 
-                    : 'bg-gray-300 text-gray-600'
-                }`}>
-                  {completionChecklist.hasCompletedGoals ? '✓' : '4'}
-                </div>
-                <div className="flex-1">
-                  <div className="font-medium">Complete Learning Goal</div>
-                  <div className="text-sm text-gray-600">{scenario.learningGoals[0]}</div>
-                </div>
-                {completionChecklist.hasCompletedGoals && (
-                  <div className="text-green-500 font-bold">Done! ✓</div>
-                )}
-              </div>
-            </div>
-
-            {/* Completion Status */}
-            {Object.values(completionChecklist).every(Boolean) && (
-              <div className="mt-4 p-4 bg-green-100 border border-green-300 rounded-lg text-center">
-                <div className="text-green-800 font-bold text-lg">🎉 All Goals Completed!</div>
-                <div className="text-green-700 text-sm mt-1">
-                  Great job! You can now complete this scenario or continue practicing.
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Conversation Display */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Conversation with {scenario.npc.name}</CardTitle>
-          </CardHeader>
-          <CardContent>
+          <CardContent className="p-6">
             <div 
               id="conversation-container"
-              className="h-64 overflow-y-auto bg-gray-50 rounded-lg p-4 space-y-3 scroll-smooth"
+              className="h-[calc(100vh-20rem)] min-h-[600px] overflow-y-auto bg-gradient-to-b from-gray-50 to-gray-100 rounded-lg p-6 space-y-4 scroll-smooth border"
               style={{ scrollBehavior: 'smooth' }}
             >
               {transcripts.length === 0 ? (
-                <div className="text-center text-gray-500 mt-8">
-                  <p>Start the conversation to see the dialogue here</p>
-                  <p className="text-sm mt-2">You'll see both your words and {scenario.npc.name}'s responses</p>
+                <div className="text-center text-gray-500 h-full flex flex-col justify-center">
+                  <div className="text-6xl mb-4">💬</div>
+                  <p className="text-lg font-medium">Ready to start your conversation?</p>
+                  <p className="text-sm mt-2">Click "Start Conversation" below to begin speaking with {scenario.npc.name}</p>
                 </div>
               ) : (
                 transcripts.map((transcript, index) => (
@@ -550,26 +483,29 @@ export default function PracticeAdventurePage() {
                       }
                     } : undefined}
                   >
-                    <div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                    <div className={`max-w-md lg:max-w-lg xl:max-w-xl px-4 py-3 rounded-lg shadow-sm ${
                       transcript.speaker === 'user'
                         ? 'bg-blue-500 text-white'
                         : 'bg-white border border-gray-200'
-                    } ${currentSpeaker === transcript.speaker ? 'ring-2 ring-green-400' : ''}`}>
-                      <div className="text-xs opacity-70 mb-1">
-                        {transcript.speaker === 'user' ? 'You' : scenario.npc.name}
+                    } ${currentSpeaker === transcript.speaker ? 'ring-2 ring-green-400 ring-opacity-50' : ''}`}>
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="text-xs font-medium opacity-80">
+                          {transcript.speaker === 'user' ? 'You' : scenario.npc.name}
+                        </div>
+                        <div className="text-xs opacity-60">
+                          {safeFormatTime(transcript.timestamp)}
+                        </div>
                       </div>
-                      <div className="text-sm">{transcript.text}</div>
-                      <div className="text-xs opacity-50 mt-1">
-                        {safeFormatTime(transcript.timestamp)}
-                      </div>
+                      <div className="text-sm leading-relaxed">{transcript.text}</div>
                     </div>
                   </div>
                 ))
               )}
               {currentSpeaker && (
                 <div className="flex justify-center">
-                  <div className="flex items-center space-x-2 text-sm text-gray-500">
-                    <div className="animate-pulse">
+                  <div className="flex items-center space-x-2 text-sm text-gray-500 bg-white px-4 py-2 rounded-full shadow-sm">
+                    <div className="animate-pulse w-2 h-2 bg-green-500 rounded-full"></div>
+                    <div>
                       {currentSpeaker === 'user' ? 'You are speaking...' : `${scenario.npc.name} is responding...`}
                     </div>
                   </div>
