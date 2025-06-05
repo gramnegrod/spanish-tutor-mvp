@@ -255,7 +255,7 @@ export default function PracticeAdventurePage() {
       
       // Add to transcript display
       const newTranscript = {
-        id: typeof window !== 'undefined' ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
+        id: `${Date.now()}-${Math.random()}`,
         speaker: role,
         text: text,
         timestamp: new Date()
@@ -376,6 +376,20 @@ export default function PracticeAdventurePage() {
                 <h3 className="font-semibold mb-2">Meet {scenario.npc.name}</h3>
                 <p className="text-sm text-gray-600 mb-2">{scenario.npc.role}</p>
                 <p className="text-sm text-gray-700">{scenario.npc.personality}</p>
+                
+                {/* Special accent notice for pharmacy scenario */}
+                {scenario.id === 'pharmacy' && (
+                  <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-blue-600">🇬🇧</span>
+                      <span className="text-sm font-medium text-blue-800">Character Note</span>
+                    </div>
+                    <p className="text-xs text-blue-700">
+                      This pharmacist is a British expat who speaks Spanish with a noticeable English accent. 
+                      You may notice pronunciation quirks like dropped R's - this is intentional character design!
+                    </p>
+                  </div>
+                )}
               </div>
               <div>
                 <h3 className="font-semibold mb-2">Learning Goals</h3>
@@ -398,13 +412,13 @@ export default function PracticeAdventurePage() {
             <CardTitle className="flex items-center gap-2">
               📋 Conversation Goals
               <span className="text-sm font-normal text-gray-500">
-                ({Object.values(completionChecklist).filter(Boolean).length}/4 completed)
+                ({isMounted ? Object.values(completionChecklist).filter(Boolean).length : 0}/4 completed)
               </span>
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              <div className={`flex items-center gap-3 p-3 rounded-lg transition-all ${
+                <div className={`flex items-center gap-3 p-3 rounded-lg transition-all ${
                 completionChecklist.hasGreeted 
                   ? 'bg-green-50 border border-green-200' 
                   : 'bg-gray-50 border border-gray-200'
@@ -526,7 +540,7 @@ export default function PracticeAdventurePage() {
                     className={`flex ${transcript.speaker === 'user' ? 'justify-end' : 'justify-start'}`}
                     ref={index === transcripts.length - 1 ? (el) => {
                       // Auto-scroll to latest message
-                      if (el) {
+                      if (el && typeof window !== 'undefined') {
                         setTimeout(() => {
                           const container = document.getElementById('conversation-container');
                           if (container) {
@@ -680,7 +694,7 @@ export default function PracticeAdventurePage() {
                     >
                       {Object.values(completionChecklist).every(Boolean) 
                         ? '🎉 Complete Scenario (All Goals Met!)' 
-                        : `📝 Complete Scenario (${Object.values(completionChecklist).filter(Boolean).length}/4 goals)`
+                        : `📝 Complete Scenario (${isMounted ? Object.values(completionChecklist).filter(Boolean).length : 0}/4 goals)`
                       }
                     </Button>
                     
@@ -743,26 +757,6 @@ export default function PracticeAdventurePage() {
                 Goals: {completionChecklist.hasCompletedGoals ? '✅' : '❌'}
               </div>
               <div><strong>Flow Tracking:</strong> Progressive completion based on conversation exchanges</div>
-              
-              {/* Manual test button */}
-              <button 
-                onClick={() => {
-                  // Create scenario-appropriate test conversation
-                  const vocab = scenario.vocabulary.essential;
-                  const testTranscripts: ConversationTranscript[] = [
-                    { id: '1', speaker: 'user', text: `Hola ${scenario.npc.name}`, timestamp: new Date() },
-                    { id: '2', speaker: 'assistant', text: 'Hola, buenos días', timestamp: new Date() },
-                    { id: '3', speaker: 'user', text: `Necesito ayuda con mi ${vocab[0]} por favor`, timestamp: new Date() },
-                    { id: '4', speaker: 'assistant', text: 'Claro, te ayudo', timestamp: new Date() },
-                    { id: '5', speaker: 'user', text: `¿En qué ${vocab[1]} está mi habitación?`, timestamp: new Date() }
-                  ];
-                  setTranscripts(testTranscripts);
-                  checkCompletionCriteria(`¿En qué ${vocab[1]} está mi habitación?`, testTranscripts);
-                }}
-                className="bg-blue-500 text-white px-3 py-1 rounded text-xs"
-              >
-                🧪 Test with fake conversation
-              </button>
               
               {npcPrompt && (
                 <details>
