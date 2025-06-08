@@ -54,6 +54,10 @@ export class OpenAIRealtimeService {
         silenceDurationMs: 200
       },
       enableInputTranscription: false,
+      inputAudioTranscription: {
+        model: 'whisper-1',
+        language: 'es' // Default to Spanish for Spanish learning app
+      },
       ...config
     };
     this.events = events;

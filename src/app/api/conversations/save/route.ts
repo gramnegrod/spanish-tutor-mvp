@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     console.log('[API] Authenticated user:', { email: user.email, id: user.id });
 
     const body = await request.json()
-    const { title, persona, transcript, duration } = body
+    const { title, persona, transcript, duration, vocabularyAnalysis, struggleAnalysis } = body
 
     // Validate required fields
     if (!title || !persona || !transcript || !duration) {
@@ -35,15 +35,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
-    // Create conversation
-    console.log('[API] Creating conversation with:', { title, persona, transcriptLength: transcript.length, duration, userId: user.id });
+    // Create conversation with enhanced analysis
+    console.log('[API] Creating conversation with:', { 
+      title, 
+      persona, 
+      transcriptLength: transcript.length, 
+      duration, 
+      userId: user.id,
+      hasVocabAnalysis: !!vocabularyAnalysis,
+      hasStruggleAnalysis: !!struggleAnalysis
+    });
     
     const conversation = await conversationService.create(supabase, {
       user_id: user.id,
       title,
       persona,
       transcript: transcript as ConversationTranscript[],
-      duration
+      duration,
+      vocabulary_analysis: vocabularyAnalysis || {},
+      struggle_analysis: struggleAnalysis || {}
     })
     
     console.log('[API] Conversation created successfully:', conversation.id);

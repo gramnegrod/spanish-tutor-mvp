@@ -264,6 +264,10 @@ REMEMBER: You're not a language teacher, you're a taco vendor who happens to hel
     updateInstructions
   } = useOpenAIRealtime({
     enableInputTranscription: true,
+    inputAudioTranscription: {
+      model: 'whisper-1',
+      language: 'es' // 🇪🇸 Spanish language for better transcription
+    },
     instructions: generateInstructions(learnerProfile),
     voice: 'alloy',
     autoConnect: false,

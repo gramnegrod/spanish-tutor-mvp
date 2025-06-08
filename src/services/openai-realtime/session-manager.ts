@@ -104,9 +104,12 @@ export class SessionManager {
     // Only add input transcription if explicitly enabled
     if (this.config.enableInputTranscription) {
       sessionConfig.session.input_audio_transcription = {
-        model: 'whisper-1'
+        model: this.config.inputAudioTranscription?.model || 'whisper-1',
+        ...(this.config.inputAudioTranscription?.language && {
+          language: this.config.inputAudioTranscription.language
+        })
       };
-      console.log('[SessionManager] Input transcription ENABLED');
+      console.log('[SessionManager] Input transcription ENABLED with config:', sessionConfig.session.input_audio_transcription);
     } else {
       console.log('[SessionManager] Input transcription DISABLED');
     }

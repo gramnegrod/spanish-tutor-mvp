@@ -66,18 +66,20 @@ export class UnifiedStorageService {
     return GuestStorageService.getLearnerProfile();
   }
   
-  // Conversation Methods
+  // Enhanced Conversation Methods with Spanish Analysis
   static async saveConversation(
     conversation: {
       title: string;
       persona: string;
       transcript: ConversationTranscript[];
       duration: number;
+      vocabularyAnalysis?: any;
+      struggleAnalysis?: any;
     },
     user?: User | null
   ): Promise<void> {
     if (user) {
-      // Authenticated user - save to Supabase via API
+      // Authenticated user - save to Supabase via API with enhanced analysis
       try {
         await fetch('/api/conversations/save', {
           method: 'POST',
@@ -86,17 +88,29 @@ export class UnifiedStorageService {
             title: conversation.title,
             persona: conversation.persona,
             transcript: conversation.transcript,
-            duration: conversation.duration
+            duration: conversation.duration,
+            vocabularyAnalysis: conversation.vocabularyAnalysis || {},
+            struggleAnalysis: conversation.struggleAnalysis || {}
           })
         });
       } catch (error) {
         console.error('[UnifiedStorage] Failed to save conversation to Supabase:', error);
-        // Fallback to localStorage
-        this.saveConversationToGuest(conversation);
+        // Fallback to localStorage (without enhanced analysis for simplicity)
+        this.saveConversationToGuest({
+          title: conversation.title,
+          persona: conversation.persona,
+          transcript: conversation.transcript,
+          duration: conversation.duration
+        });
       }
     } else {
-      // Guest user - save to localStorage
-      this.saveConversationToGuest(conversation);
+      // Guest user - save to localStorage (basic version)
+      this.saveConversationToGuest({
+        title: conversation.title,
+        persona: conversation.persona,
+        transcript: conversation.transcript,
+        duration: conversation.duration
+      });
     }
   }
   

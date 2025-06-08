@@ -261,6 +261,11 @@ class SimpleRealtimeConnection {
                 console.error('OpenAI Error:', message.error);
             }
             
+            // Debug logging for text responses
+            if (message.type && message.type.includes('text')) {
+                console.log('Text-related message:', message.type, message);
+            }
+            
             // Track current response to avoid mixing multiple responses
             if (message.type === 'response.created') {
                 this.currentResponseId = message.response?.id;
@@ -277,8 +282,18 @@ class SimpleRealtimeConnection {
                 if (message.response_id === this.currentResponseId && this.onTranscript) {
                     this.onTranscript('assistant', message.delta, true); // true = delta update
                 }
+            } else if (message.type === 'response.text.delta') {
+                // Handle text response deltas (for text input responses)
+                if (message.response_id === this.currentResponseId && this.onTranscript) {
+                    this.onTranscript('assistant', message.delta, true); // true = delta update
+                }
             } else if (message.type === 'response.audio_transcript.done') {
                 // Mark response as complete
+                if (message.response_id === this.currentResponseId && this.onTranscript) {
+                    this.onTranscript('assistant', '', false, true); // true = complete
+                }
+            } else if (message.type === 'response.text.done') {
+                // Mark text response as complete
                 if (message.response_id === this.currentResponseId && this.onTranscript) {
                     this.onTranscript('assistant', '', false, true); // true = complete
                 }
@@ -288,6 +303,8 @@ class SimpleRealtimeConnection {
                 if (message.response_id === this.currentResponseId) {
                     this.currentResponseId = null;
                 }
+                // Reset text processing flag
+                isProcessingTextResponse = false;
             }
         } catch (error) {
             console.error('Error parsing data channel message:', error);
@@ -306,6 +323,7 @@ let realtimeConnection = null;
 let vadEnabled = true; // Default to VAD on
 let pttActive = false; // Push-to-talk state
 let pttKeyPressed = false; // Track if backtick is currently pressed
+let isProcessingTextResponse = false; // Track if we're waiting for a text response
 
 function startConversation() {
     if (!window.selectedNPC) {
@@ -595,7 +613,17 @@ function sendTextMessage() {
     statusDiv.textContent = 'Sending text message...';
     statusDiv.className = 'text-input-status sending';
     
+    // Prevent sending if already processing
+    if (isProcessingTextResponse) {
+        statusDiv.textContent = 'Please wait for current response...';
+        statusDiv.className = 'text-input-status';
+        sendBtn.disabled = false;
+        return;
+    }
+    
     try {
+        isProcessingTextResponse = true;
+        
         // Send text message to conversation
         realtimeConnection.sendMessage({
             type: 'conversation.item.create',
@@ -604,20 +632,23 @@ function sendTextMessage() {
                 role: 'user',
                 content: [
                     {
-                        type: 'input_text',
+                        type: 'text',
                         text: text
                     }
                 ]
             }
         });
         
-        // Trigger AI response
-        realtimeConnection.sendMessage({
-            type: 'response.create'
-        });
-        
         // Add to transcript immediately
         addTranscriptEntry('user', text);
+        
+        // Small delay before triggering response to ensure message is processed
+        setTimeout(() => {
+            // Trigger AI response
+            realtimeConnection.sendMessage({
+                type: 'response.create'
+            });
+        }, 100);
         
         // Clear input and update status
         textInput.value = '';
@@ -630,6 +661,7 @@ function sendTextMessage() {
         console.error('Error sending text message:', error);
         statusDiv.textContent = 'Error sending message';
         statusDiv.className = 'text-input-status';
+        isProcessingTextResponse = false;
     }
     
     // Re-enable button after short delay

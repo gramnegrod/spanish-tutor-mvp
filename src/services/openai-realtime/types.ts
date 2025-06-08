@@ -26,6 +26,12 @@ export interface RealtimeConfig {
   
   // Enable input transcription (not recommended for multilingual)
   enableInputTranscription?: boolean;
+  
+  // Input audio transcription configuration
+  inputAudioTranscription?: {
+    model?: string;
+    language?: string;
+  };
 }
 
 export interface SessionInfo {

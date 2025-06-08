@@ -77,6 +77,12 @@ A Spanish learning application using OpenAI's Realtime API for voice-based conve
 - **Supabase**: Authentication and database (fully migrated)
 - **Guest Mode**: localStorage-based practice without signup
 
+### Modular Architecture (NPM-Ready)
+- **OpenAI Realtime Module**: `src/hooks/useOpenAIRealtime.ts` + `src/services/openai-realtime.ts`
+- **Spanish Analysis Module**: `src/lib/spanish-analysis/` (comprehensive vocabulary & cultural analysis)
+- **Conversation Engine**: `src/hooks/useConversationEngine.ts` (integrates analysis with realtime)
+- **Pedagogical System**: `src/lib/pedagogical-system.ts` (adaptive prompts & comprehension detection)
+
 ### Key Learning: WebRTC vs WebSocket
 - ❌ WebSocket approach fails due to browser header restrictions
 - ✅ WebRTC with ephemeral keys is the correct approach
@@ -193,11 +199,52 @@ npm run dev
 
 3. **Security**: Never expose OpenAI API keys in client code. Always use server-side ephemeral key generation.
 
+## Module Integration Guidelines
+
+### Spanish Analysis Integration Pattern
+
+To add Spanish analysis to any practice page, follow this pattern:
+
+1. **Add scenario parameter to useConversationEngine**:
+```typescript
+const engine = useConversationEngine({
+  learnerProfile,
+  onProfileUpdate,
+  scenario: 'taco_vendor' // 🆕 Activates Spanish analysis
+})
+```
+
+2. **Include Spanish analysis UI components**:
+```typescript
+import { SpanishFeedbackDisplay } from '@/components/spanish-analysis/SpanishFeedbackDisplay'
+import { VocabularyProgressBar } from '@/components/spanish-analysis/VocabularyProgressBar'
+
+<SpanishFeedbackDisplay feedback={comprehensionFeedback} />
+<VocabularyProgressBar scenario="taco_vendor" analysis={getFullSpanishAnalysis()} />
+```
+
+3. **Enhanced conversation saving**:
+```typescript
+const analysis = getDatabaseAnalysis()
+await UnifiedStorageService.saveConversation({
+  // existing props...
+  vocabularyAnalysis: analysis.vocabularyAnalysis,
+  struggleAnalysis: analysis.struggleAnalysis
+})
+```
+
+### Modular Architecture Notes
+
+- **OpenAI Realtime**: Use `useOpenAIRealtime` hook (battle-tested)
+- **Spanish Analysis**: Use `useConversationEngine` with scenario parameter
+- **Don't reinvent**: Leverage existing modules instead of creating new ones
+- **NPM Ready**: All modules designed for eventual extraction
+
 ## Next Steps
 
-1. Integrate the Realtime service into the main Spanish tutor interface
-2. Add conversation history/memory features
-3. Implement lesson progression logic
+1. **Phase 4**: Add Spanish analysis to all practice pages
+2. **Phase 5**: Implement enhanced database schema for rich vocabulary tracking
+3. **Phase 6**: Extract modules to NPM packages
 4. Create student progress tracking
 
 ## Known Issues
@@ -657,13 +704,46 @@ if (consecutiveSuccesses >= REQUIRED_CONFIRMATIONS) { /* switch to Spanish */ }
    - Practice duration
    - Personalized encouragement
 
+### Phase 3.6: Spanish Analysis Module ✅ COMPLETE
+
+**What We Built:**
+1. **Comprehensive Spanish Analysis System**
+   - Location: `src/lib/spanish-analysis/`
+   - Mexican vocabulary database (800+ words/phrases)
+   - Cultural authenticity detection (órale, güero, chido, etc.)
+   - Grammar pattern recognition
+   - Scenario-specific vocabulary tracking
+
+2. **Enhanced Conversation Engine Integration**
+   - `useConversationEngine` enhanced with scenario parameter
+   - Automatic Spanish analysis when scenario provided
+   - Real-time vocabulary and cultural feedback
+   - Database-ready analysis output
+
+3. **Modular UI Components**
+   - `SpanishFeedbackDisplay` - Real-time feedback
+   - `VocabularyProgressBar` - Progress tracking
+   - `SessionSummaryWithAnalysis` - Enhanced summaries
+
+4. **Database Integration Foundation**
+   - Enhanced conversation storage with JSONB analysis
+   - Vocabulary and struggle analysis data structures
+   - Ready for enhanced database schema migration
+
+**Integration Status:**
+- ✅ **practice-with-analysis**: Fully integrated with Spanish analysis
+- ❌ **practice-no-auth**: Missing scenario parameter (basic analysis only)
+- ❌ **practice**: Missing scenario parameter (basic analysis only)
+- ❌ **adaptive-practice**: Uses separate analysis, needs Spanish module integration
+
 ### Current Development Status
 
-**Completed Phases:** 3.5 of 6 (58% complete)
+**Completed Phases:** 3.6 of 6 (60% complete)
 - ✅ Phase 1: Adaptive Learning Foundation
 - ✅ Phase 2: Hidden Analysis System
 - ✅ Phase 3: Authentication & Persistence
 - ✅ Phase 3.5: Enhanced Progress Feedback
+- ✅ Phase 3.6: Spanish Analysis Module
 - 📅 Phase 4: Scenario Progression System
 - 📅 Phase 5: Enhanced Analytics Dashboard
 - 📅 Phase 6: Production Readiness
@@ -679,11 +759,12 @@ if (consecutiveSuccesses >= REQUIRED_CONFIRMATIONS) { /* switch to Spanish */ }
 ### Current Testing Status
 
 **Working Pages:**
-- `/practice-no-auth` - Full features with all enhancements ✅
-- `/simple-practice` - Minimal testing version ✅
-- `/practice` - Full features for authenticated users ✅
-- `/adaptive-practice` - Structured scenarios ✅
+- `/practice-no-auth` - Full features with basic analysis ✅
+- `/practice-with-analysis` - Spanish analysis integration testing ✅
+- `/practice` - Full features for authenticated users (basic analysis) ✅
+- `/adaptive-practice` - Structured scenarios (separate analysis) ✅
 - `/test-hidden-analysis` - Hidden analysis testing ✅
+- `/test-spanish-analysis` - Spanish analysis module testing ✅
 
 **Database Status:**
 - Supabase tables created and accessible ✅
