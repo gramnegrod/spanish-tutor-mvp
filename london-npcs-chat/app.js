@@ -351,10 +351,12 @@ Remember: Stay completely in character as this specific guide. Use the tour cont
             
             if (status.includes('Connected')) {
                 statusDiv.className = 'status connected';
+                updateTextInputState(true); // Enable text input when connected
             } else if (status.includes('Error')) {
                 statusDiv.className = 'status error';
                 startBtn.disabled = false;
                 stopBtn.disabled = true;
+                updateTextInputState(false); // Disable text input on error
             }
         },
         (role, text, isDelta, isComplete) => {
@@ -376,6 +378,7 @@ function stopConversation() {
     startBtn.disabled = false;
     stopBtn.disabled = true;
     statusDiv.style.display = 'none';
+    updateTextInputState(false); // Disable text input when disconnected
 }
 
 // Track current assistant message being built
@@ -557,6 +560,114 @@ document.addEventListener('keyup', (event) => {
             realtimeConnection.triggerResponse();
         }
         event.preventDefault();
+    }
+});
+
+// Text Input Functions
+function sendTextMessage() {
+    const textInput = document.getElementById('text-input');
+    const sendBtn = document.getElementById('send-text-btn');
+    const statusDiv = document.getElementById('text-input-status');
+    
+    const text = textInput.value.trim();
+    
+    if (!text) {
+        statusDiv.textContent = 'Please enter some text';
+        statusDiv.className = 'text-input-status';
+        return;
+    }
+    
+    if (!realtimeConnection || !realtimeConnection.isConnected) {
+        statusDiv.textContent = 'Not connected - start conversation first';
+        statusDiv.className = 'text-input-status';
+        return;
+    }
+    
+    const dc = realtimeConnection.dc;
+    if (!dc || dc.readyState !== 'open') {
+        statusDiv.textContent = 'Connection not ready';
+        statusDiv.className = 'text-input-status';
+        return;
+    }
+    
+    // Update UI
+    sendBtn.disabled = true;
+    statusDiv.textContent = 'Sending text message...';
+    statusDiv.className = 'text-input-status sending';
+    
+    try {
+        // Send text message to conversation
+        realtimeConnection.sendMessage({
+            type: 'conversation.item.create',
+            item: {
+                type: 'message',
+                role: 'user',
+                content: [
+                    {
+                        type: 'input_text',
+                        text: text
+                    }
+                ]
+            }
+        });
+        
+        // Trigger AI response
+        realtimeConnection.sendMessage({
+            type: 'response.create'
+        });
+        
+        // Add to transcript immediately
+        addTranscriptEntry('user', text);
+        
+        // Clear input and update status
+        textInput.value = '';
+        statusDiv.textContent = 'Text sent! Guide is responding...';
+        statusDiv.className = 'text-input-status ready';
+        
+        console.log('Text message sent:', text);
+        
+    } catch (error) {
+        console.error('Error sending text message:', error);
+        statusDiv.textContent = 'Error sending message';
+        statusDiv.className = 'text-input-status';
+    }
+    
+    // Re-enable button after short delay
+    setTimeout(() => {
+        sendBtn.disabled = false;
+        statusDiv.textContent = 'Ready for text input';
+        statusDiv.className = 'text-input-status ready';
+    }, 2000);
+}
+
+function updateTextInputState(connected) {
+    const textInput = document.getElementById('text-input');
+    const sendBtn = document.getElementById('send-text-btn');
+    const statusDiv = document.getElementById('text-input-status');
+    
+    if (connected) {
+        textInput.disabled = false;
+        sendBtn.disabled = false;
+        statusDiv.textContent = 'Ready for text input';
+        statusDiv.className = 'text-input-status ready';
+    } else {
+        textInput.disabled = true;
+        sendBtn.disabled = true;
+        textInput.value = '';
+        statusDiv.textContent = 'Start a conversation to enable text input';
+        statusDiv.className = 'text-input-status';
+    }
+}
+
+// Keyboard shortcuts for text input
+document.addEventListener('keydown', (event) => {
+    // Ctrl+Enter to send text (don't interfere with backtick PTT)
+    if (event.ctrlKey && event.key === 'Enter') {
+        const textInput = document.getElementById('text-input');
+        if (document.activeElement === textInput && !textInput.disabled) {
+            event.preventDefault();
+            sendTextMessage();
+        }
     }
 });
 

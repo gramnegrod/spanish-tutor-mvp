@@ -389,6 +389,82 @@
             margin-bottom: 20px;
         }
         
+        /* Text Input Section Styles */
+        .text-input-section {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        
+        .text-input-header {
+            margin-bottom: 15px;
+        }
+        
+        .text-input-header h3 {
+            color: #2c3e50;
+            margin: 0 0 5px 0;
+            font-size: 18px;
+        }
+        
+        .text-input-hint {
+            color: #6c757d;
+            font-size: 14px;
+        }
+        
+        .text-input-controls {
+            display: flex;
+            gap: 15px;
+            align-items: flex-start;
+        }
+        
+        .text-input-controls textarea {
+            flex: 1;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            padding: 12px;
+            font-family: inherit;
+            font-size: 14px;
+            line-height: 1.4;
+            resize: vertical;
+            min-height: 80px;
+            transition: border-color 0.3s ease;
+        }
+        
+        .text-input-controls textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .text-input-controls textarea:disabled {
+            background-color: #f8f9fa;
+            color: #6c757d;
+            cursor: not-allowed;
+        }
+        
+        .text-send-btn {
+            min-width: 120px;
+            height: fit-content;
+            align-self: flex-end;
+        }
+        
+        .text-input-status {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #6c757d;
+            font-style: italic;
+        }
+        
+        .text-input-status.ready {
+            color: #28a745;
+        }
+        
+        .text-input-status.sending {
+            color: #ffc107;
+        }
+        
         @media (max-width: 768px) {
             .npc-grid {
                 grid-template-columns: 1fr;
@@ -396,6 +472,14 @@
             
             .chat-controls {
                 flex-direction: column;
+            }
+            
+            .text-input-controls {
+                flex-direction: column;
+            }
+            
+            .text-send-btn {
+                align-self: stretch;
             }
         }
     </style>
@@ -453,6 +537,33 @@
                 <div class="transcript-entry transcript-ai">
                     <div class="speaker">Guide:</div>
                     <div>Click "Start Tour" to begin your conversation!</div>
+                </div>
+            </div>
+            
+            <!-- Text Input Section -->
+            <div class="text-input-section">
+                <div class="text-input-header">
+                    <h3>Type or Paste Text</h3>
+                    <span class="text-input-hint">Alternative to speaking - send text messages to your guide</span>
+                </div>
+                <div class="text-input-controls">
+                    <textarea 
+                        id="text-input" 
+                        placeholder="Type your question or paste text here... Press Ctrl+Enter to send"
+                        rows="3"
+                        disabled
+                    ></textarea>
+                    <button 
+                        id="send-text-btn" 
+                        class="btn btn-primary text-send-btn" 
+                        onclick="sendTextMessage()"
+                        disabled
+                    >
+                        Send Text
+                    </button>
+                </div>
+                <div class="text-input-status" id="text-input-status">
+                    Start a conversation to enable text input
                 </div>
             </div>
         </div>

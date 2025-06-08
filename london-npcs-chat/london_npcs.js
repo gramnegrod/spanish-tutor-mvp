@@ -131,6 +131,11 @@ function showNPCSelection() {
     document.getElementById('chat-interface').style.display = 'none';
     document.getElementById('npc-selection').style.display = 'grid';
     
+    // Disable text input when returning to NPC selection
+    if (typeof updateTextInputState === 'function') {
+        updateTextInputState(false);
+    }
+    
     console.log('Returned to NPC selection - all connections should be stopped');
 }
 
