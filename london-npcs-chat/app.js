@@ -182,12 +182,31 @@ class SimpleRealtimeConnection {
                     this.updateStatus('Connected! Start speaking...');
                     // Session configuration is now sent when data channel opens
                 } else if (this.pc.connectionState === 'failed') {
-                    this.updateStatus('Connection failed');
                     this.isConnected = false;
+                    updateTextInputState(false); // Disable text input
+                    
+                    // Auto-restart if this was due to text processing
+                    if (isProcessingTextResponse) {
+                        console.log('Connection failed after text input - attempting auto-reconnect in 3 seconds...');
+                        this.updateStatus('Text sent! Reconnecting voice in 3 seconds...');
+                        isProcessingTextResponse = false;
+                        
+                        // Auto-reconnect after brief delay
+                        setTimeout(() => {
+                            console.log('Auto-reconnecting after text input...');
+                            if (window.selectedNPC && typeof startConversation === 'function') {
+                                startConversation();
+                            }
+                        }, 3000);
+                    } else {
+                        this.updateStatus('Connection failed - please restart conversation');
+                    }
                 } else if (this.pc.connectionState === 'disconnected') {
                     // Don't immediately mark as disconnected - might be temporary
-                    console.warn('Connection disconnected - may be temporary');
+                    console.warn('Connection disconnected - checking if failure follows...');
                     this.updateStatus('Connection interrupted...');
+                    this.isConnected = false;
+                    updateTextInputState(false); // Disable text input
                 }
             };
             
@@ -276,6 +295,16 @@ class SimpleRealtimeConnection {
                 console.log('Content message:', message.type, message);
             }
             
+            // Monitor rate limits
+            if (message.type === 'rate_limits.updated') {
+                console.log('Rate limits:', message.rate_limits);
+                message.rate_limits.forEach(limit => {
+                    if (limit.remaining < 10) {
+                        console.warn(`Low ${limit.name}: ${limit.remaining}/${limit.limit} remaining`);
+                    }
+                });
+            }
+            
             // Track current response to avoid mixing multiple responses
             if (message.type === 'response.created') {
                 this.currentResponseId = message.response?.id;
@@ -325,14 +354,21 @@ class SimpleRealtimeConnection {
                 // Content part complete - text should be fully accumulated
                 console.log('Content part done, accumulated text length:', this.currentTextContent.length);
             } else if (message.type === 'response.done') {
+                console.log('Full response.done message:', message);
                 const responseId = message.response?.id || message.response_id;
-                console.log('Response complete:', responseId);
-                // Clear current response ID when done
-                if (responseId === this.currentResponseId) {
-                    this.currentResponseId = null;
-                }
-                // Reset text processing flag
+                console.log('Response complete:', responseId, 'Current ID:', this.currentResponseId);
+                
+                // Always reset the flag regardless of ID match
                 isProcessingTextResponse = false;
+                
+                // Clear current response ID when done
+                if (responseId === this.currentResponseId || !responseId) {
+                    this.currentResponseId = null;
+                    // Mark transcript as complete
+                    if (this.onTranscript) {
+                        this.onTranscript('assistant', '', false, true); // Mark complete
+                    }
+                }
             }
         } catch (error) {
             console.error('Error parsing data channel message:', error);
@@ -361,6 +397,12 @@ function startConversation() {
     
     if (realtimeConnection && realtimeConnection.isConnected) {
         return; // Already connected
+    }
+    
+    // Clean up any existing connection first
+    if (realtimeConnection) {
+        realtimeConnection.disconnect();
+        realtimeConnection = null;
     }
     
     const startBtn = document.getElementById('start-btn');
@@ -718,11 +760,16 @@ function sendTextMessage() {
         isProcessingTextResponse = false;
     }
     
-    // Re-enable button after short delay
+    // Re-enable button after short delay and check connection
     setTimeout(() => {
         sendBtn.disabled = false;
-        statusDiv.textContent = 'Ready for text input';
-        statusDiv.className = 'text-input-status ready';
+        if (realtimeConnection && realtimeConnection.isConnected) {
+            statusDiv.textContent = 'Ready for text input';
+            statusDiv.className = 'text-input-status ready';
+        } else {
+            statusDiv.textContent = 'Connection lost - text sent but voice disabled';
+            statusDiv.className = 'text-input-status';
+        }
     }, 2000);
 }
 
@@ -740,8 +787,18 @@ function updateTextInputState(connected) {
         textInput.disabled = true;
         sendBtn.disabled = true;
         textInput.value = '';
-        statusDiv.textContent = 'Start a conversation to enable text input';
-        statusDiv.className = 'text-input-status';
+        
+        // Show different message based on connection state
+        if (realtimeConnection && !realtimeConnection.isConnected) {
+            statusDiv.textContent = 'Connection lost - restart conversation to continue';
+            statusDiv.className = 'text-input-status';
+        } else {
+            statusDiv.textContent = 'Start a conversation to enable text input';
+            statusDiv.className = 'text-input-status';
+        }
+        
+        // Reset processing flag
+        isProcessingTextResponse = false;
     }
 }
 
