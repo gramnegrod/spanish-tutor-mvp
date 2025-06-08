@@ -8,6 +8,7 @@ class SimpleRealtimeConnection {
         this.onStatusUpdate = null;
         this.onTranscript = null;
         this.currentResponseId = null;
+        this.currentTextContent = ''; // Track accumulated text for content parts
     }
     
     getVoiceForNPC(npc) {
@@ -180,9 +181,13 @@ class SimpleRealtimeConnection {
                     this.isConnected = true;
                     this.updateStatus('Connected! Start speaking...');
                     // Session configuration is now sent when data channel opens
-                } else if (this.pc.connectionState === 'failed' || this.pc.connectionState === 'disconnected') {
+                } else if (this.pc.connectionState === 'failed') {
                     this.updateStatus('Connection failed');
                     this.isConnected = false;
+                } else if (this.pc.connectionState === 'disconnected') {
+                    // Don't immediately mark as disconnected - might be temporary
+                    console.warn('Connection disconnected - may be temporary');
+                    this.updateStatus('Connection interrupted...');
                 }
             };
             
@@ -266,10 +271,20 @@ class SimpleRealtimeConnection {
                 console.log('Text-related message:', message.type, message);
             }
             
+            // Debug logging for content parts
+            if (message.type && message.type.includes('content')) {
+                console.log('Content message:', message.type, message);
+            }
+            
             // Track current response to avoid mixing multiple responses
             if (message.type === 'response.created') {
                 this.currentResponseId = message.response?.id;
+                this.currentTextContent = ''; // Reset accumulated text
                 console.log('New response started:', this.currentResponseId);
+                // Create a new assistant entry for this response
+                if (this.onTranscript) {
+                    this.onTranscript('assistant', '', false); // Start new message
+                }
             }
             
             if (message.type === 'conversation.item.input_audio_transcription.completed') {
@@ -297,10 +312,23 @@ class SimpleRealtimeConnection {
                 if (message.response_id === this.currentResponseId && this.onTranscript) {
                     this.onTranscript('assistant', '', false, true); // true = complete
                 }
+            } else if (message.type === 'response.content_part.added') {
+                // Handle content part for text responses
+                if (message.part && message.part.type === 'text' && message.part.text) {
+                    this.currentTextContent += message.part.text;
+                    if (this.onTranscript) {
+                        // Update the current message with accumulated text
+                        this.onTranscript('assistant', this.currentTextContent, false, false, true); // true = replace content
+                    }
+                }
+            } else if (message.type === 'response.content_part.done') {
+                // Content part complete - text should be fully accumulated
+                console.log('Content part done, accumulated text length:', this.currentTextContent.length);
             } else if (message.type === 'response.done') {
-                console.log('Response complete:', message.response_id);
+                const responseId = message.response?.id || message.response_id;
+                console.log('Response complete:', responseId);
                 // Clear current response ID when done
-                if (message.response_id === this.currentResponseId) {
+                if (responseId === this.currentResponseId) {
                     this.currentResponseId = null;
                 }
                 // Reset text processing flag
@@ -427,8 +455,8 @@ function formatCodeBlocks(text) {
     }
 }
 
-function addTranscriptEntry(role, text, isDelta = false, isComplete = false) {
-    console.log('addTranscriptEntry called:', { role, text: text.substring(0, 50), isDelta, isComplete });
+function addTranscriptEntry(role, text, isDelta = false, isComplete = false, replaceContent = false) {
+    console.log('addTranscriptEntry called:', { role, text: text.substring(0, 50), isDelta, isComplete, replaceContent });
     const transcript = document.getElementById('transcript');
     
     if (role === 'user') {
@@ -451,7 +479,10 @@ function addTranscriptEntry(role, text, isDelta = false, isComplete = false) {
         currentAssistantEntry = null;
         currentAssistantContent = null;
     } else if (role === 'assistant') {
-        if (isDelta && !isComplete) {
+        if (replaceContent && currentAssistantContent) {
+            // Replace entire content (for content_part messages)
+            currentAssistantContent.innerHTML = formatCodeBlocks(text);
+        } else if (isDelta && !isComplete) {
             // Delta update - append to current message
             if (!currentAssistantEntry) {
                 // Create new entry for assistant on the left
@@ -484,26 +515,49 @@ function addTranscriptEntry(role, text, isDelta = false, isComplete = false) {
             }
             currentAssistantEntry = null;
             currentAssistantContent = null;
-        } else {
-            // Complete message (not delta)
-            const entry = document.createElement('div');
-            entry.className = 'transcript-entry transcript-ai';
-            
-            const messageContainer = document.createElement('div');
-            messageContainer.className = 'message-container ai-message';
-            
-            const speaker = document.createElement('div');
-            speaker.className = 'speaker';
-            speaker.textContent = extractName(window.selectedNPC.persona_prompt);
-            
-            const content = document.createElement('div');
-            content.className = 'message-content';
-            content.innerHTML = formatCodeBlocks(text);
-            
-            messageContainer.appendChild(speaker);
-            messageContainer.appendChild(content);
-            entry.appendChild(messageContainer);
-            transcript.appendChild(entry);
+        } else if (text || text === '') {
+            // Complete message (not delta) or starting a new message
+            if (text === '' && !currentAssistantEntry) {
+                // Just creating placeholder for upcoming content
+                currentAssistantEntry = document.createElement('div');
+                currentAssistantEntry.className = 'transcript-entry transcript-ai';
+                
+                const messageContainer = document.createElement('div');
+                messageContainer.className = 'message-container ai-message';
+                
+                const speaker = document.createElement('div');
+                speaker.className = 'speaker';
+                speaker.textContent = extractName(window.selectedNPC.persona_prompt);
+                
+                currentAssistantContent = document.createElement('div');
+                currentAssistantContent.className = 'message-content';
+                currentAssistantContent.textContent = '...'; // Show loading indicator
+                
+                messageContainer.appendChild(speaker);
+                messageContainer.appendChild(currentAssistantContent);
+                currentAssistantEntry.appendChild(messageContainer);
+                transcript.appendChild(currentAssistantEntry);
+            } else if (text) {
+                // Complete message with text
+                const entry = document.createElement('div');
+                entry.className = 'transcript-entry transcript-ai';
+                
+                const messageContainer = document.createElement('div');
+                messageContainer.className = 'message-container ai-message';
+                
+                const speaker = document.createElement('div');
+                speaker.className = 'speaker';
+                speaker.textContent = extractName(window.selectedNPC.persona_prompt);
+                
+                const content = document.createElement('div');
+                content.className = 'message-content';
+                content.innerHTML = formatCodeBlocks(text);
+                
+                messageContainer.appendChild(speaker);
+                messageContainer.appendChild(content);
+                entry.appendChild(messageContainer);
+                transcript.appendChild(entry);
+            }
         }
     }
     
