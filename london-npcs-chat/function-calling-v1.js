@@ -1,13 +1,13 @@
 // ================================================================================
 // 🚨 CACHE CHECK: If you don't see this message, your browser has cached old code!
 // ================================================================================
-console.log('🔥🔥🔥 VERSION 7.0 LOADED - FUNCTION CALLING ONLY - NO TEXT INPUT 🔥🔥🔥');
-console.log('🔧 [DEBUG] app.js loading... VERSION 7.0 - FUNCTION CALLING ARCHITECTURE');
-console.log('🔧 [DEBUG] Cache check - if you do not see VERSION 7.0, clear browser cache');
-console.log('📢 [IMPORTANT] NO TEXT INPUT - VOICE + DOCUMENT ANALYSIS ONLY');
+console.log('🔥🔥🔥 VERSION 4.0 LOADED - FRESH FILE - DUAL MODEL ARCHITECTURE ACTIVE 🔥🔥🔥');
+console.log('🔧 [DEBUG] app-v4-fresh.js loading... VERSION 4.0 - FRESH FILE - DUAL MODEL FIX');
+console.log('🔧 [DEBUG] Cache check - if you do not see VERSION 4.0, refresh with Ctrl+Shift+R');
 console.log('================================================================================');
 
-// Function calling architecture - no text input needed
+// Make sendTextMessage available globally for onclick
+window.sendTextMessage = null; // Will be set later
 
 // Simple WebRTC connection for OpenAI Realtime API
 class SimpleRealtimeConnection {

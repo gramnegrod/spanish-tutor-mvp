@@ -57,6 +57,10 @@ ALWAYS do comprehensive analysis for:
 - "Works here but not there" problems
 - Client/server communication issues
 
+### File Access Reminder
+
+**⚠️ CRITICAL**: When you get "file not accessible" errors, the file path is wrong. Never assume files exist. Always check directory structure first using LS tool before attempting to read files.
+
 ---
 
 ## Project Overview
@@ -201,51 +205,320 @@ npm run dev
 
 ## Module Integration Guidelines
 
-### Spanish Analysis Integration Pattern
+### 🎯 **UNIFIED ANALYSIS SYSTEM - Spanish Analysis Module (PRIMARY)**
 
-To add Spanish analysis to any practice page, follow this pattern:
+**⚠️ IMPORTANT: ALL practice pages MUST use the Spanish Analysis Module for consistency**
 
-1. **Add scenario parameter to useConversationEngine**:
+## **Standard Integration Pattern**
+
+### 1. **Core Integration - useConversationEngine**
 ```typescript
-const engine = useConversationEngine({
+import { useConversationEngine } from '@/hooks/useConversationEngine'
+import { LearnerProfile } from '@/lib/pedagogical-system' // Temporary, will migrate
+
+// Initialize with scenario for Spanish analysis
+const {
+  sessionStats,
+  lastComprehensionFeedback, 
+  conversationHistory,
+  processTranscript,
+  resetSession,
+  getFullSpanishAnalysis,
+  getDatabaseAnalysis
+} = useConversationEngine({
   learnerProfile,
-  onProfileUpdate,
-  scenario: 'taco_vendor' // 🆕 Activates Spanish analysis
+  onProfileUpdate: setLearnerProfile,
+  scenario: 'taco_vendor' // 🎯 Enables comprehensive Spanish analysis
 })
 ```
 
-2. **Include Spanish analysis UI components**:
+### 2. **Required UI Components**
 ```typescript
 import { SpanishFeedbackDisplay } from '@/components/spanish-analysis/SpanishFeedbackDisplay'
 import { VocabularyProgressBar } from '@/components/spanish-analysis/VocabularyProgressBar'
+import { SessionSummaryWithAnalysis } from '@/components/spanish-analysis/SessionSummaryWithAnalysis'
+import { VocabularyGuide } from '@/components/spanish-analysis/VocabularyGuide'
 
-<SpanishFeedbackDisplay feedback={comprehensionFeedback} />
-<VocabularyProgressBar scenario="taco_vendor" analysis={getFullSpanishAnalysis()} />
+// Real-time feedback
+{lastComprehensionFeedback && (
+  <SpanishFeedbackDisplay feedback={lastComprehensionFeedback} />
+)}
+
+// Progress tracking
+<VocabularyProgressBar 
+  scenario="taco_vendor"
+  analysis={getFullSpanishAnalysis()}
+  sessionStats={sessionStats}
+/>
+
+// Vocabulary reference
+<VocabularyGuide 
+  scenario="taco_vendor"
+  wordsUsed={getFullSpanishAnalysis()?.wordsUsed.map(w => w.word) || []}
+/>
+
+// Enhanced session summary
+<SessionSummaryWithAnalysis
+  analysis={getFullSpanishAnalysis()}
+  sessionStats={sessionStats}
+  duration={conversationDuration}
+  onClose={handleClose}
+/>
 ```
 
-3. **Enhanced conversation saving**:
+### 3. **Transcript Processing Integration**
 ```typescript
-const analysis = getDatabaseAnalysis()
-await UnifiedStorageService.saveConversation({
-  // existing props...
-  vocabularyAnalysis: analysis.vocabularyAnalysis,
-  struggleAnalysis: analysis.struggleAnalysis
-})
+onTranscript: (role: 'user' | 'assistant', text: string) => {
+  // Process through Spanish Analysis Module
+  processTranscript(role, text)
+  
+  // Update conversation display
+  setTranscripts(prev => [...prev, newTranscript])
+}
 ```
+
+### 4. **Available Scenarios**
+```typescript
+// Supported Spanish analysis scenarios:
+'taco_vendor'           // ✅ Don Roberto taco stand (primary)
+'mexico_city_adventure' // ✅ Mexico City tourism scenarios  
+'hotel_checkin'         // ✅ Hotel registration
+'taxi_ride'             // ✅ Taxi conversations
+'restaurant'            // ✅ Restaurant ordering
+'market'                // ✅ Market shopping
+```
+
+## **Implementation Status**
+
+### ✅ **PAGES USING SPANISH ANALYSIS MODULE:**
+- `/practice-with-analysis` - Full integration (Don Roberto)
+- `/practice-no-auth` - Full integration  
+- `/practice` - Full integration
+- `/practice-adventure` - 🆕 **NEWLY INTEGRATED** (Mexico City)
+
+### ❌ **DEPRECATED APPROACHES:**
+- ~~Direct useOpenAIRealtime usage~~ - Use useConversationEngine instead
+- ~~Custom analysis logic~~ - Use Spanish Analysis Module
+- ~~Basic pedagogical-system~~ - Migrate to Spanish Analysis Module
+
+## **Benefits of Unified System**
+
+✅ **Consistent Analysis**: Same vocabulary tracking across all scenarios  
+✅ **Cultural Authenticity**: Mexican Spanish expressions properly recognized  
+✅ **Rich Feedback**: Real-time comprehension and confidence scoring  
+✅ **Progress Tracking**: Cumulative vocabulary mastery across sessions  
+✅ **Copy-Paste Summaries**: User-friendly session reports  
+✅ **NPM Ready**: Modular architecture for future extraction
 
 ### Modular Architecture Notes
 
 - **OpenAI Realtime**: Use `useOpenAIRealtime` hook (battle-tested)
-- **Spanish Analysis**: Use `useConversationEngine` with scenario parameter
+- **Spanish Analysis**: Use `useConversationEngine` with scenario parameter  
+- **Database Operations**: Use Language Learning DB module (`src/lib/language-learning-db/`)
 - **Don't reinvent**: Leverage existing modules instead of creating new ones
 - **NPM Ready**: All modules designed for eventual extraction
 
+### 🗄️ **Database Architecture - Language Learning DB Module**
+
+**⚠️ FUTURE: All practice pages should migrate to use the unified Language Learning DB**
+
+```typescript
+import { LanguageLearningDB } from '@/lib/language-learning-db'
+
+// Create database instance (handles both auth and guest users)
+const db = user 
+  ? LanguageLearningDB.createWithSupabase({ url, apiKey })
+  : LanguageLearningDB.createWithLocalStorage()
+
+// Unified API for all data operations
+await db.saveConversation(conversationData, user)
+await db.progress.trackVocabulary(userId, 'es', vocabularyWords)
+await db.profiles.updatePreferences(userId, 'es', preferences)
+```
+
+**Benefits:**
+- ✅ **Storage Agnostic**: Works with Supabase, localStorage, Firebase
+- ✅ **Type Safe**: Full TypeScript coverage
+- ✅ **NPM Ready**: Designed for extraction as standalone package
+- ✅ **Guest Support**: LocalStorage adapter for non-authenticated users
+- ✅ **Rich Analytics**: Built-in learning progress tracking
+
+## 🚀 Strategic Module Architecture Plan
+
+### Current Module Status (85% Complete)
+
+#### ✅ **Production-Ready Modules**
+1. **Spanish Analysis Module** (80% complete) - `src/lib/spanish-analysis/`
+   - Comprehensive vocabulary tracking
+   - Cultural authenticity detection
+   - Real-time feedback system
+   - **Status**: NPM-ready, battle-tested
+
+2. **OpenAI WebRTC Module** (90% complete) - `src/services/openai-realtime/`
+   - Real-time speech-to-speech
+   - WebRTC connection management
+   - Cost tracking
+   - **Status**: NPM-ready, production-tested
+
+3. **Language Learning DB** (95% complete) - `src/lib/language-learning-db/`
+   - Universal storage API
+   - Multi-backend support (Supabase, localStorage)
+   - Full service layer
+   - **Status**: NPM-ready, fully tested
+
+### 🎯 Future Module Extraction Opportunities
+
+#### 1. **Session Management Module** 🟡
+```typescript
+// @your-org/learning-session
+export class LearningSessionManager {
+  startSession(type: 'conversation' | 'video' | 'quiz')
+  trackProgress(metrics: SessionMetrics)
+  completeSession(results: SessionResults)
+  generateSummary(): SessionSummary
+}
+```
+**Extract from**: Various practice pages' timer and completion logic
+**Development time**: 1 day
+
+#### 2. **Assessment Module** 🔴 (Critical for growth)
+```typescript
+// @your-org/assessment-engine
+export class AssessmentEngine {
+  generateQuiz(content: MediaContent): Quiz
+  evaluateResponse(response: UserResponse): Score
+  adaptDifficulty(performance: Performance): NextQuestion
+  generateFeedback(results: TestResults): Feedback
+}
+```
+**Build new**: No existing code
+**Development time**: 2-3 days
+
+#### 3. **Media Learning Module** 🔴 (Future video features)
+```typescript
+// @your-org/media-learning
+export class MediaLearningPlayer {
+  loadContent(video: VideoContent)
+  syncTranscript(timestamp: number): TranscriptSegment
+  trackEngagement(): EngagementMetrics
+  extractKeyVocabulary(): VocabularyList
+}
+```
+**Build new**: For 30-second news videos, etc.
+**Development time**: 3-4 days
+
+#### 4. **NPC Personality Module** 🟢 (Quick win)
+```typescript
+// @your-org/ai-personality
+export class AIPersonality {
+  createCharacter(role: 'taco_vendor' | 'news_anchor' | 'teacher')
+  generatePrompt(context: ConversationContext): Prompt
+  maintainPersona(history: ConversationHistory): Instructions
+}
+```
+**Extract from**: `src/lib/npc-personality-system.ts`
+**Development time**: 4 hours
+
+#### 5. **Adaptive Learning Engine** 🟡
+```typescript
+// @your-org/adaptive-learning
+export class AdaptiveLearningEngine {
+  assessComprehension(interaction: LearningInteraction): Level
+  adjustDifficulty(performance: Performance): NextChallenge
+  recommendContent(profile: LearnerProfile): ContentList
+}
+```
+**Extract from**: Current comprehension detection logic
+**Development time**: 1-2 days
+
+### 📋 Recommended Development Plan
+
+#### **Immediate Priority** (This Week)
+1. ✅ Complete database migration to Language Learning DB
+   - Migrate remaining 4 practice pages
+   - Delete old storage services (guest-storage.ts, unified-storage.ts)
+   - Time: 2-3 hours
+
+#### **Sprint 1** (Next Week) - Easy Extractions
+1. 🟢 Extract NPC Personality Module (4 hours)
+2. 🟡 Extract Session Management Module (1 day)
+3. 🧹 Clean up pedagogical-system dependencies (1 day)
+
+#### **Sprint 2** (Following Week) - Critical New Modules
+1. 🔴 Build Assessment Module (2-3 days)
+   - Quiz generation
+   - Adaptive difficulty
+   - Comprehensive feedback
+
+#### **Sprint 3** (When Ready for Video)
+1. 🔴 Build Media Learning Module (3-4 days)
+   - Video player integration
+   - Transcript synchronization
+   - Engagement tracking
+
+#### **Sprint 4** - Advanced Features
+1. 🟡 Formalize Adaptive Learning Engine (1-2 days)
+2. 🟡 Extract Progress Visualization Components
+
+### 🎬 Example: News Video Learning Feature
+
+With the complete module ecosystem, implementing new features becomes trivial:
+
+```typescript
+import { MediaLearningPlayer } from '@your-org/media-learning'
+import { AssessmentEngine } from '@your-org/assessment-engine'
+import { AIPersonality } from '@your-org/ai-personality'
+import { SpanishAnalysis } from '@your-org/spanish-analysis'
+import { LearningSessionManager } from '@your-org/learning-session'
+import { LanguageLearningDB } from '@your-org/language-learning-db'
+
+async function newsVideoLearning(videoId: string) {
+  // Complete learning experience in ~20 lines
+  const session = new LearningSessionManager()
+  const player = new MediaLearningPlayer()
+  const newsAnchor = new AIPersonality('news_anchor')
+  
+  // Watch video → Conversation → Test → Save
+  await player.loadContent(videoId)
+  const conversation = await conductConversation(newsAnchor)
+  const quiz = new AssessmentEngine().generateQuiz(video)
+  await LanguageLearningDB.saveSession(results)
+}
+```
+
+### 🏆 Strategic Benefits
+
+1. **Rapid Feature Development** - New features in hours, not weeks
+2. **Consistent Quality** - Reuse battle-tested components
+3. **Team Scalability** - Independent module ownership
+4. **Monetization Options** - License modules separately
+5. **Community Building** - Open source some, premium others
+
+### 📊 Module Dependency Graph
+
+```
+Language Learning DB (Foundation)
+    ├── Spanish Analysis Module
+    ├── Session Management 
+    ├── Assessment Engine
+    └── Adaptive Learning
+    
+OpenAI WebRTC (Communication)
+    ├── AI Personality
+    └── Media Learning
+    
+Progress Visualization (UI)
+    ├── Spanish Analysis Components
+    └── Assessment Results
+```
+
 ## Next Steps
 
-1. **Phase 4**: Add Spanish analysis to all practice pages
-2. **Phase 5**: Implement enhanced database schema for rich vocabulary tracking
-3. **Phase 6**: Extract modules to NPM packages
-4. Create student progress tracking
+1. **Phase 4**: Complete database migration to unified Language Learning DB
+2. **Phase 5**: Extract Session Management and NPC Personality modules
+3. **Phase 6**: Build Assessment Module for testing features
+4. **Phase 7**: Create Media Learning Module when ready for video content
+5. **Phase 8**: Package all modules as NPM packages for reuse
 
 ## Known Issues
 

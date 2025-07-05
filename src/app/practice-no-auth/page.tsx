@@ -9,12 +9,19 @@ import { useOpenAIRealtime } from '@/hooks/useOpenAIRealtime'
 import { ArrowLeft, RefreshCw, Mic, Loader2 } from 'lucide-react'
 import { ConversationTranscript } from '@/types'
 import { generateAdaptivePrompt, LearnerProfile } from '@/lib/pedagogical-system'
-import { UnifiedStorageService } from '@/lib/unified-storage'
+import { LanguageLearningDB } from '@/lib/language-learning-db'
 import { GuestModeHeader } from '@/components/layout/GuestModeHeader'
 import { useConversationEngine } from '@/hooks/useConversationEngine'
 import { usePracticeAdaptation } from '@/hooks/usePracticeAdaptation'
 import { ProgressFeedback } from '@/components/practice/ProgressFeedback'
 import { VoiceControl } from '@/components/practice/VoiceControl'
+
+// Spanish Analysis UI Components
+import { SpanishFeedbackDisplay } from '@/components/spanish-analysis/SpanishFeedbackDisplay'
+import { VocabularyProgressBar } from '@/components/spanish-analysis/VocabularyProgressBar'
+import { VocabularyGuide } from '@/components/spanish-analysis/VocabularyGuide'
+import { SessionSummaryWithAnalysis } from '@/components/spanish-analysis/SessionSummaryWithAnalysis'
+import { TrendingUp, Award } from 'lucide-react'
 
 // Guest Progress Component
 function GuestProgressCard() {
@@ -22,15 +29,22 @@ function GuestProgressCard() {
   const [showSignupPrompt, setShowSignupPrompt] = useState(false);
 
   useEffect(() => {
-    const loadProgress = () => {
-      const storageInfo = UnifiedStorageService.getStorageInfo();
-      if (storageInfo.type === 'guest' && 'totalSize' in storageInfo) {
+    const loadProgress = async () => {
+      try {
+        const db = LanguageLearningDB.createWithLocalStorage();
+        const conversations = await db.conversations.getForUser('guest', { limit: 100 });
+        const totalMinutes = conversations.reduce((sum, conv) => sum + (conv.duration || 0), 0) / 60;
+        
         setProgress({
-          totalMinutes: Math.floor(storageInfo.totalSize / 100), // Rough estimate
-          conversationsCompleted: storageInfo.conversationCount,
+          totalMinutes: Math.floor(totalMinutes),
+          conversationsCompleted: conversations.length,
           vocabulary: []
         });
-        setShowSignupPrompt(UnifiedStorageService.shouldPromptSignup());
+        
+        // Show signup prompt after 5+ conversations or 30+ minutes
+        setShowSignupPrompt(conversations.length >= 5 || totalMinutes >= 30);
+      } catch (error) {
+        console.warn('[GuestProgress] Error loading:', error);
       }
     };
     
@@ -158,6 +172,7 @@ export default function PracticeNoAuthPage() {
   const [transcripts, setTranscripts] = useState<ConversationTranscript[]>([])
   const [currentSpeaker, setCurrentSpeaker] = useState<string | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [showSummary, setShowSummary] = useState(false)
   
   // Track learner profile - use LearnerProfile interface
   const [learnerProfile, setLearnerProfile] = useState<LearnerProfile>({
@@ -170,14 +185,82 @@ export default function PracticeNoAuthPage() {
   
   // Current scenario state
   const [currentScenario] = useState('taco_ordering');
+  const SCENARIO = 'taco_vendor'
+  const NPC_NAME = 'Don Roberto'
   
   // Store ref to disconnect function to use in cleanup
   const disconnectRef = useRef<(() => void) | null>(null);
   
+  // Initialize Language Learning DB for guest mode
+  const db = LanguageLearningDB.createWithLocalStorage();
+  
+  // Load profile from storage on mount
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        const savedProfile = await db.profiles.get('guest', 'es');
+        if (savedProfile) {
+          setLearnerProfile({
+            level: savedProfile.level,
+            comfortWithSlang: savedProfile.preferences?.culturalContext === true,
+            needsMoreEnglish: savedProfile.preferences?.supportLevel === 'heavy',
+            strugglingWords: savedProfile.strugglingAreas || [],
+            masteredPhrases: savedProfile.masteredConcepts || []
+          });
+          console.log('[Practice-NoAuth] Loaded profile from storage');
+        }
+      } catch (error) {
+        console.log('[Practice-NoAuth] No existing profile found, using defaults');
+      }
+    };
+    loadProfile();
+  }, []);
+  
   // Save profile to guest storage
   const saveProfileToStorage = async (profile: LearnerProfile) => {
-    await UnifiedStorageService.saveLearnerProfile(profile);
-    console.log('[Practice-NoAuth] Saved profile to guest storage');
+    try {
+      // Try to update existing profile first
+      await db.profiles.update('guest', 'es', {
+        level: profile.level,
+        strugglingAreas: profile.strugglingWords,
+        masteredConcepts: profile.masteredPhrases,
+        preferences: {
+          learningStyle: 'mixed',
+          pace: 'normal', 
+          supportLevel: profile.needsMoreEnglish ? 'heavy' : 'moderate',
+          culturalContext: profile.comfortWithSlang
+        }
+      });
+    } catch (error: any) {
+      // If profile doesn't exist, create it
+      if (error.message === 'Profile not found') {
+        await db.profiles.save({
+          userId: 'guest',
+          language: 'es',
+          level: profile.level,
+          goals: ['practice conversation', 'learn mexican spanish'],
+          strugglingAreas: profile.strugglingWords,
+          masteredConcepts: profile.masteredPhrases,
+          commonErrors: [],
+          preferences: {
+            learningStyle: 'mixed',
+            pace: 'normal', 
+            supportLevel: profile.needsMoreEnglish ? 'heavy' : 'moderate',
+            culturalContext: profile.comfortWithSlang
+          },
+          adaptations: {
+            srsSchedule: {},
+            errorPatterns: {},
+            successPatterns: {}
+          },
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+      } else {
+        throw error;
+      }
+    }
+    console.log('[Practice-NoAuth] Saved profile to Language Learning DB');
   };
   
   // Generate AI instructions
@@ -212,11 +295,12 @@ MENU & PRICES:
 REMEMBER: You're not a language teacher, you're a taco vendor who happens to help tourists learn Spanish naturally.`;
   };
 
-  // Initialize conversation engine first (no dependencies)
+  // Initialize conversation engine with Spanish analysis
   const conversationEngine = useConversationEngine({
     learnerProfile,
     onProfileUpdate: setLearnerProfile,
-    onSaveProfile: saveProfileToStorage
+    onSaveProfile: saveProfileToStorage,
+    scenario: SCENARIO // 🎯 Enable Spanish analysis
   });
 
   // Create refs for stable access
@@ -266,7 +350,7 @@ REMEMBER: You're not a language teacher, you're a taco vendor who happens to hel
     enableInputTranscription: true,
     inputAudioTranscription: {
       model: 'whisper-1',
-      language: 'es' // 🇪🇸 Spanish language for better transcription
+      language: 'es' // 🇪🇸 Spanish (Español)
     },
     instructions: generateInstructions(learnerProfile),
     voice: 'alloy',
@@ -298,10 +382,21 @@ REMEMBER: You're not a language teacher, you're a taco vendor who happens to hel
   // Load guest learner profile on mount
   useEffect(() => {
     const loadGuestProfile = async () => {
-      const savedProfile = await UnifiedStorageService.getLearnerProfile();
-      if (savedProfile) {
-        console.log('[Practice-NoAuth] Loaded guest profile:', savedProfile);
-        setLearnerProfile(savedProfile);
+      try {
+        const profile = await db.profiles.get('guest', 'es');
+        if (profile) {
+          const learnerProfile = {
+            level: profile.level as 'beginner' | 'intermediate' | 'advanced',
+            comfortWithSlang: profile.preferences?.culturalContext || false,
+            needsMoreEnglish: profile.preferences?.supportLevel === 'heavy',
+            strugglingWords: profile.strugglingAreas || [],
+            masteredPhrases: profile.masteredConcepts || []
+          };
+          console.log('[Practice-NoAuth] Loaded guest profile from LL-DB:', learnerProfile);
+          setLearnerProfile(learnerProfile);
+        }
+      } catch (error) {
+        console.log('[Practice-NoAuth] No existing profile, using defaults');
       }
     };
     
@@ -358,24 +453,29 @@ REMEMBER: You're not a language teacher, you're a taco vendor who happens to hel
       if (transcripts.length > 0 && conversationStartTime) {
         const duration = Math.floor((Date.now() - conversationStartTime.getTime()) / 1000);
         
-        console.log('[Practice-NoAuth] Saving conversation to guest storage...');
-        await UnifiedStorageService.saveConversation({
-          title: `Taco Practice - ${new Date().toLocaleTimeString()}`,
-          persona: 'Taquero',
+        // Get full Spanish analysis for saving
+        const fullAnalysis = getFullSpanishAnalysis();
+        
+        console.log('[Practice-NoAuth] Saving conversation to Language Learning DB...');
+        await db.saveConversation({
+          title: `${NPC_NAME} - ${new Date().toLocaleTimeString()}`,
+          persona: NPC_NAME,
           transcript: transcripts,
-          duration: duration
-        });
+          duration: duration,
+          language: 'es',
+          scenario: SCENARIO
+          // Note: analysis integration can be added later when types are aligned
+        }, { id: 'guest' });
         
         // Update progress
         const minutes = Math.ceil(duration / 60);
-        const vocabulary = extractSpanishWords(
-          transcripts.filter(t => t.speaker === 'assistant').map(t => t.text).join(' ')
-        );
+        const vocabulary = fullAnalysis?.wordsUsed.map(w => w.word) || 
+          extractSpanishWords(transcripts.filter(t => t.speaker === 'assistant').map(t => t.text).join(' '));
         
-        await UnifiedStorageService.updateProgress({
-          minutes_practiced: minutes,
-          conversations_completed: 1,
-          vocabulary: vocabulary
+        await db.progress.update('guest', 'es', {
+          totalMinutesPracticed: minutes,
+          conversationsCompleted: 1
+          // Note: vocabulary tracking can be added when types are aligned  
         });
         
         console.log('[Practice-NoAuth] Session saved successfully:', {
@@ -384,41 +484,44 @@ REMEMBER: You're not a language teacher, you're a taco vendor who happens to hel
           vocabulary: vocabulary.length
         });
         
-        // Show detailed session feedback using hook data
-        const userResponses = transcripts.filter(t => t.speaker === 'user').length;
-        const stats = conversationEngine.sessionStats;
-        const successRate = stats.totalResponses > 0 ? Math.round((stats.goodResponses / stats.totalResponses) * 100) : 0;
-        const confidenceScore = Math.round(stats.averageConfidence * 100);
-        
-        const sessionFeedback = `🎉 Great practice session!\n\n` +
-          `📊 Your Performance:\n` +
-          `• ${userResponses} conversation exchanges\n` +
-          `• ${successRate}% success rate\n` +
-          `• ${confidenceScore}% average confidence\n` +
-          `• ${learnerProfile.masteredPhrases.length} new words learned\n` +
-          `• ${minutes} minutes practiced\n\n` +
-          `${stats.improvementTrend === 'improving' ? '📈 You\'re improving during the session!' :
-            stats.improvementTrend === 'declining' ? '💪 Keep practicing - you\'re learning!' :
-            '🎯 Consistent performance throughout!'}`;
-        
-        alert(sessionFeedback);
+        // Show proper session summary component instead of alert
+        setShowSummary(true);
       }
     } catch (error) {
       console.error('[Practice-NoAuth] Error saving session:', error);
     } finally {
-      // Reset state
-      setTranscripts([]);
-      setConversationStartTime(null);
-      conversationEngine.resetSession();
-      adaptationSystem.resetAdaptation();
       setIsProcessing(false);
     }
   };
 
   // Get current state from hooks
-  const { sessionStats, lastComprehensionFeedback } = conversationEngine;
+  const { sessionStats, lastComprehensionFeedback, getFullSpanishAnalysis, getDatabaseAnalysis } = conversationEngine;
   const { showAdaptationNotification, getAdaptationProgress } = adaptationSystem;
   const adaptationProgress = getAdaptationProgress();
+  
+  // Handle closing session summary
+  const handleCloseSummary = () => {
+    setShowSummary(false);
+    // Reset state after closing summary
+    setTranscripts([]);
+    setConversationStartTime(null);
+    conversationEngine.resetSession();
+    adaptationSystem.resetAdaptation();
+  };
+  
+  // Get Spanish analysis for display
+  const currentAnalysis = getFullSpanishAnalysis();
+  
+  // Debug analysis data
+  useEffect(() => {
+    console.log('[PracticeNoAuth] Spanish analysis update:', {
+      hasAnalysis: !!currentAnalysis,
+      wordsUsed: currentAnalysis?.wordsUsed?.length || 0,
+      essentialVocabCoverage: sessionStats.essentialVocabCoverage,
+      spanishWordsUsed: sessionStats.spanishWordsUsed,
+      mexicanExpressionsUsed: sessionStats.mexicanExpressionsUsed
+    });
+  }, [currentAnalysis, sessionStats]);
 
   return (
     <div className="min-h-screen">
@@ -427,9 +530,89 @@ REMEMBER: You're not a language teacher, you're a taco vendor who happens to hel
         <div className="max-w-4xl mx-auto space-y-6">
           {/* Header */}
           <div className="text-center">
-            <h1 className="text-2xl font-bold">Practice with Taquero</h1>
+            <h1 className="text-2xl font-bold">Practice with {NPC_NAME}</h1>
             <p className="text-gray-600 mt-1">Free practice mode - your progress is saved locally</p>
           </div>
+
+          {/* Vocabulary Guide */}
+          <div className="mb-6">
+            <VocabularyGuide 
+              scenario={SCENARIO}
+              wordsUsed={currentAnalysis?.wordsUsed?.map(w => w.word) || []}
+            />
+          </div>
+
+          {/* Spanish Analysis Dashboard */}
+          <div className="grid md:grid-cols-3 gap-4 mb-6">
+            
+            {/* Vocabulary Progress */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4" />
+                  Vocabulary Progress
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <VocabularyProgressBar
+                  scenario={SCENARIO}
+                  analysis={currentAnalysis}
+                  sessionStats={sessionStats}
+                />
+              </CardContent>
+            </Card>
+
+            {/* Mexican Expressions */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Award className="w-4 h-4" />
+                  Mexican Spanish
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">
+                  {sessionStats.mexicanExpressionsUsed}
+                </div>
+                <div className="text-xs text-gray-600">expressions used</div>
+                {currentAnalysis?.mexicanExpressions.slice(-3).map((expr, i) => (
+                  <div key={i} className="text-xs mt-1 text-green-700">
+                    "{expr}" ✨
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
+            {/* Session Stats */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Session Progress</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <span>Exchanges:</span>
+                    <span className="font-medium">{sessionStats.totalResponses}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Spanish Words:</span>
+                    <span className="font-medium">{sessionStats.spanishWordsUsed}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Confidence:</span>
+                    <span className="font-medium">
+                      {Math.round(sessionStats.averageConfidence * 100)}%
+                    </span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Real-time Spanish Feedback Display */}
+          {lastComprehensionFeedback && (
+            <SpanishFeedbackDisplay feedback={lastComprehensionFeedback} />
+          )}
 
           {/* Main Content */}
           <div className="grid md:grid-cols-2 gap-6">
@@ -558,6 +741,16 @@ REMEMBER: You're not a language teacher, you're a taco vendor who happens to hel
           </div>
         </div>
       </div>
+
+      {/* Session Summary */}
+      {showSummary && conversationStartTime && (
+        <SessionSummaryWithAnalysis
+          analysis={currentAnalysis}
+          sessionStats={sessionStats}
+          duration={Math.floor((Date.now() - conversationStartTime.getTime()) / 1000)}
+          onClose={handleCloseSummary}
+        />
+      )}
     </div>
   );
 }

@@ -158,13 +158,23 @@ export function useConversationEngine(options: ConversationEngineOptions) {
       
       // Enhanced Spanish analysis
       const quickAnalysis = analyzeSpanishText(text, scenario, learnerProfile.level as any);
-      const essentialCheck = checkEssentialVocabulary(text, scenario);
+      
+      // Check essential vocabulary against ENTIRE conversation, not just this message
+      const allUserText = conversationHistory
+        .filter(turn => turn.role === 'user')
+        .map(turn => turn.text)
+        .join(' ') + ' ' + text; // Include current message
+      
+      const essentialCheck = checkEssentialVocabulary(allUserText, scenario);
       
       console.log('[ConversationEngine] Enhanced Spanish analysis:', {
+        currentMessage: text.substring(0, 30) + '...',
+        allUserTextLength: allUserText.length,
         spanishWords: quickAnalysis.spanishWords,
         mexicanExpressions: quickAnalysis.mexicanExpressions,
         essentialCoverage: essentialCheck.coverage,
-        essentialUsed: essentialCheck.used
+        essentialUsed: essentialCheck.used.length,
+        essentialUsedWords: essentialCheck.used
       });
       
       // Update profile with enhanced vocabulary analysis
@@ -197,6 +207,13 @@ export function useConversationEngine(options: ConversationEngineOptions) {
       newStats.mexicanExpressionsUsed += quickAnalysis.mexicanExpressions.length;
       newStats.essentialVocabCoverage = essentialCheck.coverage;
       newStats.grammarAccuracy = confidence; // Use comprehension confidence as grammar proxy for now
+      
+      console.log('[ConversationEngine] Session stats update:', {
+        essentialCoverage: essentialCheck.coverage,
+        essentialUsed: essentialCheck.used,
+        newStatsEssentialCoverage: newStats.essentialVocabCoverage,
+        quickAnalysisSpanishWords: quickAnalysis.spanishWords.length
+      });
       
       if (confidence > 0.6) {
         newStats.goodResponses += 1;

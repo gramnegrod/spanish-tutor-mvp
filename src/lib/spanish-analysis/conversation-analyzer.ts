@@ -785,7 +785,11 @@ export class SpanishConversationAnalyzer {
       verb_conjugation: ['Practice common verb conjugations', 'Focus on present tense patterns'],
       gender_agreement: ['Learn noun genders', 'Practice article-noun combinations'],
       formality_choice: ['Study tú vs usted usage', 'Practice formal/informal contexts'],
-      question_formation: ['Practice question word placement', 'Study interrogative patterns']
+      question_formation: ['Practice question word placement', 'Study interrogative patterns'],
+      past_tense: ['Practice preterite vs imperfect', 'Study past tense endings'],
+      subjunctive: ['Learn subjunctive triggers', 'Practice doubt and emotion expressions'],
+      ser_vs_estar: ['Study permanent vs temporary states', 'Practice ser/estar contexts'],
+      direct_object_pronouns: ['Learn pronoun placement', 'Practice lo/la/los/las usage']
     }
     
     return suggestions[errorType] || ['Continue practicing this grammar point']

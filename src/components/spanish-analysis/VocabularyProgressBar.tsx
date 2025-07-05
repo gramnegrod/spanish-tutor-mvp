@@ -32,21 +32,21 @@ export function VocabularyProgressBar({ scenario, analysis, sessionStats }: Voca
         />
       </div>
       
-      {analysis && analysis.sessionMetrics && (
+      {sessionStats.spanishWordsUsed > 0 && (
         <div className="mt-2 space-y-1">
           <div className="flex justify-between text-xs">
-            <span>Total Words:</span>
-            <span className="font-medium">{analysis.sessionMetrics.totalSpanishWords}</span>
+            <span>Spanish Words:</span>
+            <span className="font-medium">{sessionStats.spanishWordsUsed}</span>
           </div>
           <div className="flex justify-between text-xs">
-            <span>Unique Words:</span>
-            <span className="font-medium">{analysis.sessionMetrics.uniqueSpanishWords}</span>
+            <span>Mexican Expressions:</span>
+            <span className="font-medium">{sessionStats.mexicanExpressionsUsed}</span>
           </div>
-          {analysis.sessionMetrics.grammarAccuracy > 0 && (
+          {sessionStats.grammarAccuracy > 0 && (
             <div className="flex justify-between text-xs">
               <span>Grammar:</span>
               <span className="font-medium">
-                {Math.round((1 - analysis.sessionMetrics.grammarErrorRate) * 100)}%
+                {Math.round(sessionStats.grammarAccuracy * 100)}%
               </span>
             </div>
           )}

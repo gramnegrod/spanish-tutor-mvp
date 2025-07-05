@@ -11,12 +11,19 @@ import { useOpenAIRealtime } from '@/hooks/useOpenAIRealtime'
 import { ArrowLeft, RefreshCw, Mic, Loader2 } from 'lucide-react'
 import { generateAdaptivePrompt, LearnerProfile } from '@/lib/pedagogical-system'
 import { ConversationTranscript } from '@/types'
-import { ConversationAnalysisService } from '@/services/conversation-analysis'
+import { LanguageLearningDB } from '@/lib/language-learning-db'
 import { useConversationEngine } from '@/hooks/useConversationEngine'
 import { usePracticeAdaptation } from '@/hooks/usePracticeAdaptation'
 import { ProgressFeedback } from '@/components/practice/ProgressFeedback'
 import { SessionStatsDisplay } from '@/components/practice/SessionStats'
 import { VoiceControl } from '@/components/practice/VoiceControl'
+
+// Spanish Analysis UI Components
+import { SpanishFeedbackDisplay } from '@/components/spanish-analysis/SpanishFeedbackDisplay'
+import { VocabularyProgressBar } from '@/components/spanish-analysis/VocabularyProgressBar'
+import { VocabularyGuide } from '@/components/spanish-analysis/VocabularyGuide'
+import { SessionSummaryWithAnalysis } from '@/components/spanish-analysis/SessionSummaryWithAnalysis'
+import { TrendingUp, Award } from 'lucide-react'
 
 export default function PracticePage() {
   console.log('[Practice] Component rendering...');
@@ -30,6 +37,7 @@ export default function PracticePage() {
   const [transcripts, setTranscripts] = useState<ConversationTranscript[]>([])
   const [currentSpeaker, setCurrentSpeaker] = useState<string | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [showSummary, setShowSummary] = useState(false)
 
   // Track learner profile
   const [learnerProfile, setLearnerProfile] = useState<LearnerProfile>({
@@ -42,25 +50,43 @@ export default function PracticePage() {
   
   // Current scenario state
   const [currentScenario] = useState('taco_ordering');
+  const SCENARIO = 'taco_vendor'
+  const NPC_NAME = 'Don Roberto'
   
   // Store ref to disconnect function to use in cleanup
   const disconnectRef = useRef<(() => void) | null>(null);
   
-  // Save profile to Supabase
+  // Initialize Language Learning DB with Supabase
+  const createDB = () => {
+    if (typeof window === 'undefined') return null;
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (supabaseUrl && supabaseKey) {
+      return LanguageLearningDB.createWithSupabase({ url: supabaseUrl, apiKey: supabaseKey });
+    }
+    return null;
+  };
+  
+  // Save profile to Language Learning DB
   const saveUserAdaptations = async (profile: LearnerProfile) => {
     if (!user) return;
     
     try {
-      console.log('[Practice] Saving user adaptations:', profile);
-      await fetch('/api/adaptations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          common_errors: profile.strugglingWords,
-          mastered_concepts: profile.masteredPhrases,
-          struggle_areas: profile.needsMoreEnglish ? ['comprehension'] : []
-        })
-      });
+      console.log('[Practice] Saving user adaptations to LL-DB:', profile);
+      const db = createDB();
+      if (db) {
+        await db.profiles.update(user.id, 'es', {
+          level: profile.level,
+          strugglingAreas: profile.strugglingWords,
+          masteredConcepts: profile.masteredPhrases,
+          preferences: {
+            learningStyle: 'mixed',
+            pace: 'normal',
+            supportLevel: profile.needsMoreEnglish ? 'heavy' : 'moderate',
+            culturalContext: profile.comfortWithSlang
+          }
+        });
+      }
     } catch (error) {
       console.error('[Practice] Failed to save user adaptations:', error);
     }
@@ -98,11 +124,12 @@ MENU & PRICES:
 REMEMBER: You're not a language teacher, you're a taco vendor who happens to help tourists learn Spanish naturally.`;
   };
 
-  // Initialize conversation engine first (it has no dependencies on OpenAI hook)
+  // Initialize conversation engine with Spanish analysis
   const conversationEngine = useConversationEngine({
     learnerProfile,
     onProfileUpdate: setLearnerProfile,
-    onSaveProfile: saveUserAdaptations
+    onSaveProfile: saveUserAdaptations,
+    scenario: SCENARIO // 🎯 Enable Spanish analysis
   });
 
   // Refs to hold the latest hooks for callback access
@@ -160,6 +187,10 @@ REMEMBER: You're not a language teacher, you're a taco vendor who happens to hel
     audioRef
   } = useOpenAIRealtime({
     enableInputTranscription: true,
+    inputAudioTranscription: {
+      model: 'whisper-1',
+      language: 'es' // 🇪🇸 Spanish (Español) for better transcription
+    },
     instructions: generateInstructions(learnerProfile),
     voice: 'alloy',
     autoConnect: false,
@@ -221,25 +252,24 @@ REMEMBER: You're not a language teacher, you're a taco vendor who happens to hel
     if (!user) return;
     
     try {
-      console.log('[Practice] Loading user adaptations...');
-      const response = await fetch('/api/adaptations');
-      
-      if (response.ok) {
-        const { adaptations } = await response.json();
+      console.log('[Practice] Loading user adaptations from LL-DB...');
+      const db = createDB();
+      if (db) {
+        const profile = await db.profiles.get(user.id, 'es');
         
-        if (adaptations) {
-          const profile = {
-            level: 'beginner' as const,
-            comfortWithSlang: false,
-            needsMoreEnglish: adaptations.common_errors.length > 3,
-            strugglingWords: adaptations.common_errors,
-            masteredPhrases: adaptations.mastered_concepts
+        if (profile) {
+          const learnerProfile = {
+            level: profile.level as 'beginner' | 'intermediate' | 'advanced',
+            comfortWithSlang: profile.preferences?.culturalContext || false,
+            needsMoreEnglish: profile.preferences?.supportLevel === 'heavy',
+            strugglingWords: profile.strugglingAreas || [],
+            masteredPhrases: profile.masteredConcepts || []
           };
           
-          console.log('[Practice] Loaded adaptations:', profile);
-          setLearnerProfile(profile);
+          console.log('[Practice] Loaded adaptations from LL-DB:', learnerProfile);
+          setLearnerProfile(learnerProfile);
         } else {
-          console.log('[Practice] No existing adaptations found, using defaults');
+          console.log('[Practice] No existing profile found, using defaults');
         }
       }
     } catch (error) {
@@ -292,83 +322,36 @@ REMEMBER: You're not a language teacher, you're a taco vendor who happens to hel
         throw new Error('User not authenticated');
       }
 
-      // Save conversation and analyze
-      console.log('[Practice] Saving conversation to Supabase...');
-      const saveResponse = await fetch('/api/conversations/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: 'Taco Ordering Practice',
-          persona: 'TAQUERO',
+      // Get full Spanish analysis for saving
+      const fullAnalysis = getFullSpanishAnalysis();
+      
+      // Save conversation using Language Learning DB
+      console.log('[Practice] Saving conversation to Language Learning DB...');
+      const db = createDB();
+      if (db) {
+        await db.saveConversation({
+          title: `${NPC_NAME} - ${new Date().toLocaleTimeString()}`,
+          persona: NPC_NAME,
           transcript: transcripts,
-          duration
-        })
-      });
-
-      if (!saveResponse.ok) {
-        throw new Error('Failed to save conversation');
+          duration,
+          language: 'es',
+          scenario: SCENARIO
+          // Note: analysis integration can be added later when types are aligned
+        }, user);
+        
+        // Update user progress
+        console.log('[Practice] Updating user progress via LL-DB...');
+        await db.progress.update(user.id, 'es', {
+          totalMinutesPracticed: Math.ceil(duration / 60),
+          conversationsCompleted: 1
+          // Note: vocabulary tracking can be added when types are aligned
+        });
+        
+        console.log('[Practice] Conversation and progress saved successfully');
       }
 
-      const { conversation } = await saveResponse.json();
-      console.log('[Practice] Conversation saved with ID:', conversation.id);
-
-      // Analyze conversation
-      const analysisService = new ConversationAnalysisService();
-      const analysis = await analysisService.analyzeConversation(
-        transcripts,
-        'beginner',
-        ['order_food', 'ask_price', 'polite_interaction']
-      );
-      
-      // Update conversation with analysis
-      await fetch('/api/conversations/update-analysis', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          conversationId: conversation.id,
-          analysis
-        })
-      });
-
-      // Update user progress
-      const vocabulary = analysisService.extractVocabulary(transcripts);
-      console.log('[Practice] Updating user progress...');
-      const progressResponse = await fetch('/api/progress', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          vocabulary,
-          minutesPracticed: Math.ceil(duration / 60),
-          pronunciationImprovement: analysis.quality_assessment.engagement > 0.7 ? 2 : 1,
-          grammarImprovement: analysis.mistakes.length < 3 ? 2 : 1,
-          fluencyImprovement: analysis.conversation_metrics.wordsPerMinute > 60 ? 2 : 1,
-          culturalImprovement: analysis.cultural_notes.length > 0 ? 2 : 1
-        })
-      });
-
-      if (!progressResponse.ok) {
-        throw new Error(`Failed to save progress: ${progressResponse.status}`);
-      }
-
-      // Show session feedback
-      const userResponses = transcripts.filter(t => t.speaker === 'user').length;
-      const stats = conversationEngine.sessionStats;
-      const successRate = stats.totalResponses > 0 ? Math.round((stats.goodResponses / stats.totalResponses) * 100) : 0;
-      const confidenceScore = Math.round(stats.averageConfidence * 100);
-      
-      const sessionFeedback = `🎉 Great practice session!\n\n` +
-        `📊 Your Performance:\n` +
-        `• ${userResponses} conversation exchanges\n` +
-        `• ${successRate}% success rate\n` +
-        `• ${confidenceScore}% average confidence\n` +
-        `• ${learnerProfile.masteredPhrases.length} words mastered\n` +
-        `• ${Math.ceil(duration / 60)} minutes practiced\n\n` +
-        `${stats.improvementTrend === 'improving' ? '📈 You\'re improving during the session!' :
-          stats.improvementTrend === 'declining' ? '💪 Keep practicing - you\'re learning!' :
-          '🎯 Consistent performance throughout!'}\n\n` +
-        `📝 Full analysis saved to your progress!`;
-      
-      alert(sessionFeedback);
+      // Show proper session summary component
+      setShowSummary(true);
       
     } catch (error) {
       console.error('Failed to save conversation:', error);
@@ -395,14 +378,35 @@ REMEMBER: You're not a language teacher, you're a taco vendor who happens to hel
     dismissWarning();
   };
 
+  // Get current state from hooks (MUST be before any early returns!)
+  const { sessionStats, lastComprehensionFeedback, getFullSpanishAnalysis, getDatabaseAnalysis } = conversationEngine;
+  const { showAdaptationNotification, getAdaptationProgress } = adaptationSystem;
+  const adaptationProgress = getAdaptationProgress();
+  
+  // Get Spanish analysis for display
+  const currentAnalysis = getFullSpanishAnalysis();
+
+  // Debug analysis data (hook must be before early return)
+  useEffect(() => {
+    console.log('[Practice] Spanish analysis update:', {
+      hasAnalysis: !!currentAnalysis,
+      wordsUsed: currentAnalysis?.wordsUsed?.length || 0,
+      essentialVocabCoverage: sessionStats.essentialVocabCoverage,
+      spanishWordsUsed: sessionStats.spanishWordsUsed,
+      mexicanExpressionsUsed: sessionStats.mexicanExpressionsUsed
+    });
+  }, [currentAnalysis, sessionStats]);
+
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
   }
-
-  // Get current state from hooks
-  const { sessionStats, lastComprehensionFeedback } = conversationEngine;
-  const { showAdaptationNotification, getAdaptationProgress } = adaptationSystem;
-  const adaptationProgress = getAdaptationProgress();
+  
+  // Handle closing session summary
+  const handleCloseSummary = () => {
+    setShowSummary(false);
+    // Navigate back to dashboard after closing summary
+    router.push('/dashboard');
+  };
 
   return (
     <div className="min-h-screen">
@@ -411,9 +415,89 @@ REMEMBER: You're not a language teacher, you're a taco vendor who happens to hel
         <div className="max-w-4xl mx-auto space-y-6">
           {/* Page Title */}
           <div className="text-center">
-            <h1 className="text-3xl font-bold">Practice with Taquero</h1>
+            <h1 className="text-3xl font-bold">Practice with {NPC_NAME}</h1>
             <p className="text-gray-600 mt-2">Order tacos from a friendly Mexican street vendor</p>
           </div>
+
+          {/* Vocabulary Guide */}
+          <div className="mb-6">
+            <VocabularyGuide 
+              scenario={SCENARIO}
+              wordsUsed={currentAnalysis?.wordsUsed?.map(w => w.word) || []}
+            />
+          </div>
+
+          {/* Spanish Analysis Dashboard */}
+          <div className="grid md:grid-cols-3 gap-4 mb-6">
+            
+            {/* Vocabulary Progress */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4" />
+                  Vocabulary Progress
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <VocabularyProgressBar
+                  scenario={SCENARIO}
+                  analysis={currentAnalysis}
+                  sessionStats={sessionStats}
+                />
+              </CardContent>
+            </Card>
+
+            {/* Mexican Expressions */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Award className="w-4 h-4" />
+                  Mexican Spanish
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">
+                  {sessionStats.mexicanExpressionsUsed}
+                </div>
+                <div className="text-xs text-gray-600">expressions used</div>
+                {currentAnalysis?.mexicanExpressions.slice(-3).map((expr, i) => (
+                  <div key={i} className="text-xs mt-1 text-green-700">
+                    "{expr}" ✨
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
+            {/* Session Stats */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Session Progress</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <span>Exchanges:</span>
+                    <span className="font-medium">{sessionStats.totalResponses}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Spanish Words:</span>
+                    <span className="font-medium">{sessionStats.spanishWordsUsed}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Confidence:</span>
+                    <span className="font-medium">
+                      {Math.round(sessionStats.averageConfidence * 100)}%
+                    </span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Real-time Spanish Feedback Display */}
+          {lastComprehensionFeedback && (
+            <SpanishFeedbackDisplay feedback={lastComprehensionFeedback} />
+          )}
 
           {/* Main Content */}
           <div className="grid md:grid-cols-2 gap-6">
@@ -566,6 +650,16 @@ REMEMBER: You're not a language teacher, you're a taco vendor who happens to hel
             </Button>
           </div>
         </div>
+      )}
+
+      {/* Session Summary */}
+      {showSummary && conversationStartTime && (
+        <SessionSummaryWithAnalysis
+          analysis={currentAnalysis}
+          sessionStats={sessionStats}
+          duration={Math.floor((Date.now() - conversationStartTime.getTime()) / 1000)}
+          onClose={handleCloseSummary}
+        />
       )}
     </div>
   );

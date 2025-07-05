@@ -1,13 +1,13 @@
 // ================================================================================
 // 🚨 CACHE CHECK: If you don't see this message, your browser has cached old code!
 // ================================================================================
-console.log('🔥🔥🔥 VERSION 7.0 LOADED - FUNCTION CALLING ONLY - NO TEXT INPUT 🔥🔥🔥');
-console.log('🔧 [DEBUG] app.js loading... VERSION 7.0 - FUNCTION CALLING ARCHITECTURE');
-console.log('🔧 [DEBUG] Cache check - if you do not see VERSION 7.0, clear browser cache');
-console.log('📢 [IMPORTANT] NO TEXT INPUT - VOICE + DOCUMENT ANALYSIS ONLY');
+console.log('🔥🔥🔥 VERSION 2.0 LOADED - DUAL MODEL ARCHITECTURE ACTIVE 🔥🔥🔥');
+console.log('🔧 [DEBUG] app.js loading... VERSION 2.0 - DUAL MODEL FIX');
+console.log('🔧 [DEBUG] Cache check - if you do not see VERSION 2.0, refresh with Ctrl+Shift+R');
 console.log('================================================================================');
 
-// Function calling architecture - no text input needed
+// Make sendTextMessage available globally for onclick
+window.sendTextMessage = null; // Will be set later
 
 // Simple WebRTC connection for OpenAI Realtime API
 class SimpleRealtimeConnection {
@@ -142,7 +142,7 @@ class SimpleRealtimeConnection {
                     silenceDuration = 500;  // Quicker responses for technical Q&A
                 }
                 
-                // Build session config with conditional VAD and function calling
+                // Build session config with conditional VAD
                 const sessionConfig = {
                     instructions: instructionsToSend,
                     voice: voiceToUse,
@@ -152,26 +152,7 @@ class SimpleRealtimeConnection {
                     output_audio_format: 'pcm16',
                     input_audio_transcription: {
                         model: 'whisper-1'
-                    },
-                    tools: [{
-                        type: 'function',
-                        name: 'analyze_document',
-                        description: 'Analyze large documents, books, or texts and answer questions about them in the context of London history and culture',
-                        parameters: {
-                            type: 'object',
-                            properties: {
-                                document_content: {
-                                    type: 'string',
-                                    description: 'The text content of the document to analyze'
-                                },
-                                user_question: {
-                                    type: 'string', 
-                                    description: 'The specific question the user is asking about the document'
-                                }
-                            },
-                            required: ['document_content', 'user_question']
-                        }
-                    }]
+                    }
                 };
                 
                 // Configure turn detection based on VAD setting
@@ -213,14 +194,30 @@ class SimpleRealtimeConnection {
                     // Session configuration is now sent when data channel opens
                 } else if (this.pc.connectionState === 'failed') {
                     this.isConnected = false;
-                    updateDocumentAnalysisState(false); // Disable document analysis
-                    this.updateStatus('Connection failed - please restart conversation');
+                    updateTextInputState(false); // Disable text input
+                    
+                    // Auto-restart if this was due to text processing
+                    if (isProcessingTextResponse) {
+                        console.log('Connection failed after text input - attempting auto-reconnect in 3 seconds...');
+                        this.updateStatus('Text sent! Reconnecting voice in 3 seconds...');
+                        isProcessingTextResponse = false;
+                        
+                        // Auto-reconnect after brief delay
+                        setTimeout(() => {
+                            console.log('Auto-reconnecting after text input...');
+                            if (window.selectedNPC && typeof startConversation === 'function') {
+                                startConversation();
+                            }
+                        }, 3000);
+                    } else {
+                        this.updateStatus('Connection failed - please restart conversation');
+                    }
                 } else if (this.pc.connectionState === 'disconnected') {
                     // Don't immediately mark as disconnected - might be temporary
                     console.warn('Connection disconnected - checking if failure follows...');
                     this.updateStatus('Connection interrupted...');
                     this.isConnected = false;
-                    updateDocumentAnalysisState(false); // Disable document analysis
+                    updateTextInputState(false); // Disable text input
                 }
             };
             
@@ -364,15 +361,6 @@ class SimpleRealtimeConnection {
                         this.onTranscript('assistant', this.currentTextContent, false, false, true); // true = replace content
                     }
                 }
-            } else if (message.type === 'response.function_call_arguments.delta') {
-                // Handle function call argument streaming
-                console.log('Function call argument delta:', message);
-            } else if (message.type === 'response.function_call_arguments.done') {
-                // Function call arguments complete - execute the function
-                console.log('Function call complete:', message);
-                if (message.name === 'analyze_document') {
-                    this.handleDocumentAnalysis(message.arguments, message.call_id);
-                }
             } else if (message.type === 'response.content_part.done') {
                 // Content part complete - text should be fully accumulated
                 console.log('Content part done, accumulated text length:', this.currentTextContent.length);
@@ -381,7 +369,8 @@ class SimpleRealtimeConnection {
                 const responseId = message.response?.id || message.response_id;
                 console.log('Response complete:', responseId, 'Current ID:', this.currentResponseId);
                 
-                // Note: removed isProcessingTextResponse as we no longer use text input
+                // Always reset the flag regardless of ID match
+                isProcessingTextResponse = false;
                 
                 // Clear current response ID when done
                 if (responseId === this.currentResponseId || !responseId) {
@@ -397,81 +386,6 @@ class SimpleRealtimeConnection {
         }
     }
     
-    async handleDocumentAnalysis(args, callId) {
-        console.log('🔍 Handling document analysis function call:', args);
-        
-        try {
-            // Parse the function arguments
-            const { document_content, user_question } = typeof args === 'string' ? JSON.parse(args) : args;
-            
-            // Get document content from textarea if not provided in function call
-            const documentTextarea = document.getElementById('document-content');
-            const actualDocumentContent = document_content || documentTextarea?.value || '';
-            
-            console.log('📚 Analyzing document:', {
-                contentLength: actualDocumentContent?.length || 0,
-                question: user_question?.substring(0, 100) + '...',
-                source: document_content ? 'function_args' : 'textarea'
-            });
-            
-            // Show user that we're analyzing
-            if (this.onTranscript) {
-                this.onTranscript('assistant', '🔍 Analyzing document with advanced AI...', false);
-            }
-            
-            // Call the GPT-4.1 backend
-            const response = await fetch('/api/book-analysis', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    bookContent: actualDocumentContent,
-                    userQuestion: user_question,
-                    npcPersonality: window.selectedNPC
-                })
-            });
-            
-            if (!response.ok) {
-                throw new Error(`Analysis failed: ${response.status}`);
-            }
-            
-            const result = await response.json();
-            console.log('✅ Document analysis complete:', result.analysis?.length, 'characters');
-            
-            // Send function result back to Realtime API
-            this.sendMessage({
-                type: 'conversation.item.create',
-                item: {
-                    type: 'function_call_output',
-                    call_id: callId,
-                    output: result.analysis
-                }
-            });
-            
-            // Trigger response to speak the result
-            this.sendMessage({
-                type: 'response.create'
-            });
-            
-        } catch (error) {
-            console.error('💥 Document analysis failed:', error);
-            
-            // Send error back to Realtime API
-            this.sendMessage({
-                type: 'conversation.item.create',
-                item: {
-                    type: 'function_call_output',
-                    call_id: callId,
-                    output: `I apologize, but I encountered an error analyzing that document: ${error.message}. Please try with a shorter text or ask me a direct question instead.`
-                }
-            });
-            
-            // Trigger response to speak the error
-            this.sendMessage({
-                type: 'response.create'
-            });
-        }
-    }
-    
     updateStatus(status) {
         if (this.onStatusUpdate) {
             this.onStatusUpdate(status);
@@ -484,6 +398,7 @@ let realtimeConnection = null;
 let vadEnabled = true; // Default to VAD on
 let pttActive = false; // Push-to-talk state
 let pttKeyPressed = false; // Track if backtick is currently pressed
+let isProcessingTextResponse = false; // Track if we're waiting for a text response
 
 function startConversation() {
     if (!window.selectedNPC) {
@@ -525,24 +440,6 @@ PRACTICAL INFO: ${npc.prices_hours}
 
 SAMPLE Q&A FOR REFERENCE: ${npc.sample_qa}
 
-DOCUMENT ANALYSIS CAPABILITY: You have access to an advanced analyze_document function that can process large texts, books, articles, or documents. The user can provide document content via a text area on the page. When they say phrases like the ones below, immediately call the analyze_document function:
-
-TRIGGER PHRASES (call analyze_document immediately when you hear these):
-- "analyze this document"
-- "analyze the document" 
-- "look at this document"
-- "review this document"
-- "what does this document say"
-- "examine this text"
-- "analyze this text"
-- "tell me about this document"
-
-When you hear these phrases, immediately call analyze_document with:
-- document_content: "" (empty - the function will get it from the page)  
-- user_question: [the user's question or "Please analyze this document"]
-
-Do NOT ask them to share the content - they've already provided it in the text area.
-
 Remember: Stay completely in character as this specific guide. Use the tour content and current events naturally in conversation. Answer visitor questions using the provided information.`;
     
     realtimeConnection.connect(
@@ -553,12 +450,12 @@ Remember: Stay completely in character as this specific guide. Use the tour cont
             
             if (status.includes('Connected')) {
                 statusDiv.className = 'status connected';
-                updateDocumentAnalysisState(true); // Enable document analysis when connected
+                updateTextInputState(true); // Enable text input when connected
             } else if (status.includes('Error')) {
                 statusDiv.className = 'status error';
                 startBtn.disabled = false;
                 stopBtn.disabled = true;
-                updateDocumentAnalysisState(false); // Disable document analysis on error
+                updateTextInputState(false); // Disable text input on error
             }
         },
         (role, text, isDelta, isComplete) => {
@@ -580,7 +477,7 @@ function stopConversation() {
     startBtn.disabled = false;
     stopBtn.disabled = true;
     statusDiv.style.display = 'none';
-    updateDocumentAnalysisState(false); // Disable document analysis when disconnected
+    updateTextInputState(false); // Disable text input when disconnected
 }
 
 // Track current assistant message being built
@@ -792,66 +689,364 @@ document.addEventListener('keyup', (event) => {
 });
 
 // ================================================================================
-// FUNCTION CALLING ARCHITECTURE - Document Analysis  
+// LEGACY FUNCTIONS - Kept for compatibility but replaced by new architecture
 // ================================================================================
-// Document analysis via function calls:
-// Method 1: User speaks → AI calls analyze_document() → Backend processes → Voice response  
-// Method 2: User clicks button → Manually trigger analyze_document() → Voice response
 
-// Manual document analysis trigger
-function triggerDocumentAnalysis() {
-    console.log('🔘 Manual document analysis triggered');
+// Simple function to extract book content and question for GPT-4.1 analysis
+function extractBookContentAndQuestion(text) {
+    console.log('📖 [EXTRACT] Extracting book content and question from text length:', text.length);
     
-    if (!realtimeConnection || !realtimeConnection.isConnected) {
-        alert('Please start a conversation first');
-        return;
+    // For large content, treat the whole thing as book content
+    if (text.length > 800) {
+        return {
+            bookContent: text,
+            userQuestion: "Can you help me understand this content and relate it to London history or culture?"
+        };
     }
     
-    const documentTextarea = document.getElementById('document-content');
-    const documentContent = documentTextarea?.value?.trim();
-    
-    if (!documentContent) {
-        alert('Please paste some document content first');
-        return;
-    }
-    
-    const defaultQuestion = "Please analyze this document and explain how it relates to London history and culture.";
-    
-    // Manually call the document analysis function
-    realtimeConnection.handleDocumentAnalysis({
-        document_content: documentContent,
-        user_question: defaultQuestion
-    }, 'manual_' + Date.now());
+    // For shorter text, treat as a question about content
+    return {
+        bookContent: "", 
+        userQuestion: text
+    };
 }
 
-// Make function globally available
-window.triggerDocumentAnalysis = triggerDocumentAnalysis;
+async function sendBookAnalysisQuery(bookContent, userQuestion, npcPersonality) {
+    try {
+        console.log('📡 [DEBUG] sendBookAnalysisQuery() called');
+        console.log('📡 [DEBUG] Sending book analysis query:', {
+            bookContentLength: bookContent.length,
+            userQuestion: userQuestion.substring(0, 100) + '...',
+            npc: npcPersonality.role,
+            hasBookContent: !!bookContent,
+            hasUserQuestion: !!userQuestion,
+            hasNpcPersonality: !!npcPersonality
+        });
+        
+        const response = await fetch('/api/book-analysis', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                bookContent,
+                userQuestion,
+                npcPersonality
+            })
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(`Book analysis failed: ${errorData.error}`);
+        }
+        
+        const data = await response.json();
+        console.log('Book analysis response:', {
+            analysisLength: data.analysis.length,
+            tokensUsed: data.usage?.total_tokens,
+            model: data.model
+        });
+        
+        return data.analysis;
+        
+    } catch (error) {
+        console.error('Book analysis error:', error);
+        throw error;
+    }
+}
+
+// ================================================================================
+// NEW "BYPASS NOT ROUTE" ARCHITECTURE - Text Input Handler
+// ================================================================================
+
+// Main text input handler - Routes BEFORE WebRTC, not within it
+async function handleTextInput() {
+    console.log('🔀 [ROUTER] handleTextInput() called - NEW BYPASS ARCHITECTURE');
+    
+    const textInput = document.getElementById('text-input');
+    const sendBtn = document.getElementById('send-text-btn');
+    const statusDiv = document.getElementById('text-input-status');
+    
+    const text = textInput.value.trim();
+    
+    console.log('🔀 [ROUTER] Processing text:', {
+        textLength: text.length,
+        textPreview: text.substring(0, 100) + '...'
+    });
+    
+    // Basic validation
+    if (!text) {
+        statusDiv.textContent = 'Please enter some text';
+        statusDiv.className = 'text-input-status';
+        return;
+    }
+    
+    if (!realtimeConnection || !realtimeConnection.isConnected) {
+        statusDiv.textContent = 'Not connected - start conversation first';
+        statusDiv.className = 'text-input-status';
+        return;
+    }
+    
+    if (!window.selectedNPC) {
+        statusDiv.textContent = 'No NPC selected';
+        statusDiv.className = 'text-input-status';
+        return;
+    }
+    
+    // Prevent concurrent processing
+    if (isProcessingTextResponse) {
+        statusDiv.textContent = 'Please wait for current response...';
+        return;
+    }
+    
+    // Update UI
+    sendBtn.disabled = true;
+    statusDiv.textContent = 'Processing...';
+    statusDiv.className = 'text-input-status sending';
+    
+    try {
+        isProcessingTextResponse = true;
+        
+        // STEP 1: Route EARLY - before any WebRTC interaction
+        if (text.length > 800 || detectBookContent(text)) {
+            console.log('📚 [ROUTER] Large content detected - routing to GPT-4.1');
+            console.log('📚 [ROUTER] Bypassing WebRTC entirely');
+            return await handleLargeContent(text);
+        } else {
+            console.log('💬 [ROUTER] Normal text - using WebRTC');
+            return await handleNormalText(text);
+        }
+        
+    } catch (error) {
+        console.error('💥 [ROUTER] Critical error:', error);
+        statusDiv.textContent = 'Error processing message';
+        statusDiv.className = 'text-input-status';
+    } finally {
+        isProcessingTextResponse = false;
+        sendBtn.disabled = false;
+        textInput.value = '';
+        
+        // Update status based on connection
+        setTimeout(() => {
+            if (realtimeConnection && realtimeConnection.isConnected) {
+                statusDiv.textContent = 'Ready for text input';
+                statusDiv.className = 'text-input-status ready';
+            } else {
+                statusDiv.textContent = 'Connection lost - restart conversation';
+                statusDiv.className = 'text-input-status';
+            }
+        }, 1000);
+    }
+}
+
+// Handle large content via GPT-4.1 - COMPLETELY BYPASS WebRTC
+async function handleLargeContent(text) {
+    console.log('📚 [LARGE] Processing large content via GPT-4.1');
+    console.log('📚 [LARGE] Text length:', text.length);
+    
+    const statusDiv = document.getElementById('text-input-status');
+    statusDiv.textContent = 'Analyzing document with GPT-4.1...';
+    statusDiv.className = 'text-input-status analyzing';
+    
+    try {
+        // Extract book content and question
+        const { bookContent, userQuestion } = extractBookContentAndQuestion(text);
+        
+        console.log('📚 [LARGE] Sending to GPT-4.1 API (bypassing WebRTC)');
+        
+        // Add user message to transcript immediately
+        addTranscriptEntry('user', userQuestion || text);
+        
+        // Call GPT-4.1 via HTTP (NO WebRTC involved)
+        const response = await fetch('/api/book-analysis', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                bookContent: bookContent,
+                userQuestion: userQuestion,
+                npcPersonality: window.selectedNPC
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`GPT-4.1 API failed: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        console.log('✅ [LARGE] GPT-4.1 response received:', result.analysis.length, 'characters');
+        
+        // Add AI response to transcript
+        addTranscriptEntry('assistant', result.analysis);
+        
+        // CRITICAL: Inject response using session.update, NOT conversation.item.create
+        console.log('🎙️ [LARGE] Injecting response via session.update (safe method)');
+        await realtimeConnection.sendMessage({
+            type: 'session.update',
+            session: {
+                instructions: `Say this response naturally as ${window.selectedNPC.role}: "${result.analysis}"`
+            }
+        });
+        
+        // Trigger voice response
+        setTimeout(() => {
+            realtimeConnection.sendMessage({ type: 'response.create' });
+        }, 100);
+        
+        statusDiv.textContent = 'Document analyzed! Response ready.';
+        statusDiv.className = 'text-input-status ready';
+        
+        console.log('✅ [LARGE] Large content processing complete - WebRTC connection preserved');
+        
+    } catch (error) {
+        console.error('💥 [LARGE] GPT-4.1 analysis failed:', error);
+        statusDiv.textContent = 'Analysis failed - try shorter text';
+        statusDiv.className = 'text-input-status';
+        
+        // Fallback to normal text processing if it's not too large
+        if (text.length <= 1000) {
+            console.log('🔄 [LARGE] Falling back to normal text processing');
+            await handleNormalText(text);
+        }
+    }
+}
+
+// Handle normal text via WebRTC - SAFE size only
+async function handleNormalText(text) {
+    console.log('💬 [NORMAL] Processing normal text via WebRTC');
+    console.log('💬 [NORMAL] Text length:', text.length, '(safe for WebRTC)');
+    
+    const statusDiv = document.getElementById('text-input-status');
+    statusDiv.textContent = 'Sending via voice connection...';
+    statusDiv.className = 'text-input-status sending';
+    
+    try {
+        // Add user message to transcript
+        addTranscriptEntry('user', text);
+        
+        // Send via WebRTC using conversation.item.create (safe for small text)
+        console.log('💬 [NORMAL] Sending to WebRTC (safe size)');
+        realtimeConnection.sendMessage({
+            type: 'conversation.item.create',
+            item: {
+                type: 'message',
+                role: 'user',
+                content: [{
+                    type: 'input_text',
+                    text: text
+                }]
+            }
+        });
+        
+        // Trigger response
+        setTimeout(() => {
+            realtimeConnection.sendMessage({ type: 'response.create' });
+        }, 100);
+        
+        statusDiv.textContent = 'Message sent! Guide is responding...';
+        statusDiv.className = 'text-input-status ready';
+        
+        console.log('✅ [NORMAL] Normal text sent via WebRTC');
+        
+    } catch (error) {
+        console.error('💥 [NORMAL] WebRTC text sending failed:', error);
+        statusDiv.textContent = 'Failed to send message';
+        statusDiv.className = 'text-input-status';
+    }
+}
+
+// Improved book content detection with size limits
+function detectBookContent(text) {
+    console.log('🔍 [DETECT] Analyzing text for book content');
+    
+    // Size-based detection (primary)
+    if (text.length > 800) {
+        console.log('🔍 [DETECT] Large text detected:', text.length, 'chars');
+        return true;
+    }
+    
+    // Content-based detection (secondary)
+    const bookIndicators = [
+        /book content:/i,
+        /chapter \d+/i,
+        /page \d+/i,
+        /the author/i,
+        /this passage/i,
+        /according to the book/i,
+        /analyze this text/i,
+        /explain this passage/i,
+        /summarize this/i
+    ];
+    
+    const hasBookIndicator = bookIndicators.some(pattern => pattern.test(text));
+    const hasMultipleParagraphs = text.split('\n\n').length > 2;
+    
+    const isBookContent = hasBookIndicator || hasMultipleParagraphs;
+    
+    console.log('🔍 [DETECT] Content analysis:', {
+        hasBookIndicator,
+        hasMultipleParagraphs,
+        isBookContent,
+        textLength: text.length
+    });
+    
+    return isBookContent;
+}
+
+// Legacy wrapper for compatibility
+async function sendTextMessage() {
+    console.log('🔄 [LEGACY] sendTextMessage() called - redirecting to new handler');
+    return await handleTextInput();
+}
 
 // ================================================================================
 // UTILITY FUNCTIONS
 // ================================================================================
 
-function updateDocumentAnalysisState(connected) {
+function updateTextInputState(connected) {
+    const textInput = document.getElementById('text-input');
+    const sendBtn = document.getElementById('send-text-btn');
     const statusDiv = document.getElementById('text-input-status');
     
     if (connected) {
-        statusDiv.textContent = '🎤 Ready for voice-based document analysis - say "I have a document to analyze"';
+        textInput.disabled = false;
+        sendBtn.disabled = false;
+        statusDiv.textContent = 'Ready for text input';
         statusDiv.className = 'text-input-status ready';
     } else {
+        textInput.disabled = true;
+        sendBtn.disabled = true;
+        textInput.value = '';
+        
         // Show different message based on connection state
         if (realtimeConnection && !realtimeConnection.isConnected) {
-            statusDiv.textContent = 'Connection lost - restart conversation to enable document analysis';
+            statusDiv.textContent = 'Connection lost - restart conversation to continue';
             statusDiv.className = 'text-input-status';
         } else {
-            statusDiv.textContent = 'Voice-based document analysis ready when conversation starts';
+            statusDiv.textContent = 'Start a conversation to enable text input';
             statusDiv.className = 'text-input-status';
         }
+        
+        // Reset processing flag
+        isProcessingTextResponse = false;
     }
 }
 
 // ================================================================================
-// EVENT HANDLERS - Voice and Connection Management
+// FIXED EVENT HANDLERS - No more HTML onclick conflicts
 // ================================================================================
+
+// Keyboard shortcuts for text input
+document.addEventListener('keydown', (event) => {
+    // Ctrl+Enter to send text (don't interfere with backtick PTT)
+    if (event.ctrlKey && event.key === 'Enter') {
+        const textInput = document.getElementById('text-input');
+        if (document.activeElement === textInput && !textInput.disabled) {
+            event.preventDefault();
+            console.log('⌨️ [KEYBOARD] Ctrl+Enter pressed - sending text');
+            handleTextInput(); // Use new router
+        }
+    }
+});
 
 // Handle page unload
 window.addEventListener('beforeunload', () => {
@@ -860,10 +1055,50 @@ window.addEventListener('beforeunload', () => {
     }
 });
 
-// Debug: Confirm function calling architecture loaded
-console.log('🔧 [DEBUG] FUNCTION CALLING ARCHITECTURE LOADED. Features available:', {
-    voiceConversation: 'Ready',
-    documentAnalysis: 'Via voice-triggered function calls',
-    gpt4Integration: 'Backend ready',
-    architecture: 'Voice → Function Call → GPT-4.1 → Voice Response'
+// Make both functions globally available for compatibility
+window.sendTextMessage = sendTextMessage; // Legacy wrapper
+window.handleTextInput = handleTextInput; // New router
+
+// PRIMARY EVENT HANDLER - Attach to button on DOM load
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('🔧 [INIT] DOM loaded - setting up NEW event handlers');
+    
+    const sendBtn = document.getElementById('send-text-btn');
+    if (sendBtn) {
+        // Remove any existing onclick to prevent conflicts
+        sendBtn.onclick = null;
+        sendBtn.removeAttribute('onclick');
+        
+        // Add our NEW handler that uses bypass architecture
+        sendBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            console.log('🔧 [BUTTON] Button clicked - using NEW bypass router');
+            handleTextInput(); // Use new bypass router directly
+        });
+        
+        console.log('✅ [INIT] New event listener attached to send button');
+    }
+    
+    // Also check text input for Enter key
+    const textInput = document.getElementById('text-input');
+    if (textInput) {
+        textInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey) {
+                e.preventDefault();
+                console.log('⌨️ [INPUT] Enter pressed in text input');
+                handleTextInput();
+            }
+        });
+        
+        console.log('✅ [INIT] Enter key handler attached to text input');
+    }
+});
+
+// Debug: Confirm function availability
+console.log('🔧 [DEBUG] NEW BYPASS ARCHITECTURE LOADED. Function availability:', {
+    handleTextInput: typeof handleTextInput,
+    sendTextMessage: typeof sendTextMessage,
+    windowHandleTextInput: typeof window.handleTextInput,
+    windowSendTextMessage: typeof window.sendTextMessage,
+    detectBookContent: typeof detectBookContent
 });

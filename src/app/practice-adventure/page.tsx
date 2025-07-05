@@ -3,21 +3,30 @@
 // Force dynamic rendering to avoid prerender issues with browser APIs
 export const dynamic = 'force-dynamic';
 
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { getScenarioById, getNextScenario } from '@/config/mexico-city-adventure';
 import { generateNPCPrompt } from '@/lib/npc-personality-system';
 import { useOpenAIRealtime } from '@/hooks/useOpenAIRealtime';
+import { useConversationEngine } from '@/hooks/useConversationEngine';
 import { 
   loadAdventureProgress, 
   saveAdventureProgress, 
   completeScenario,
   updateScenarioProgress 
 } from '@/lib/adventure-progression';
+import { LearnerProfile } from '@/lib/pedagogical-system';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArrowLeft, Mic, MicOff } from 'lucide-react';
 import { safeFormatTime } from '@/lib/utils';
+import { LanguageLearningDB } from '@/lib/language-learning-db';
+
+// Spanish Analysis UI Components
+import { SpanishFeedbackDisplay } from '@/components/spanish-analysis/SpanishFeedbackDisplay';
+import { VocabularyProgressBar } from '@/components/spanish-analysis/VocabularyProgressBar';
+import { SessionSummaryWithAnalysis } from '@/components/spanish-analysis/SessionSummaryWithAnalysis';
+import { VocabularyGuide } from '@/components/spanish-analysis/VocabularyGuide';
 
 interface ConversationTranscript {
   id: string;
@@ -27,10 +36,18 @@ interface ConversationTranscript {
 }
 
 export default function PracticeAdventurePage() {
-  const searchParams = useSearchParams();
   const router = useRouter();
-  const scenarioId = searchParams.get('scenario');
-  const adventureId = searchParams.get('adventure');
+  const [scenarioId, setScenarioId] = useState<string | null>(null);
+  const [adventureId, setAdventureId] = useState<string | null>(null);
+  
+  // Get search params on client side only
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      setScenarioId(params.get('scenario'));
+      setAdventureId(params.get('adventure'));
+    }
+  }, []);
 
   const [scenario, setScenario] = useState<any>(null);
   const [npcPrompt, setNpcPrompt] = useState('');
@@ -38,6 +55,50 @@ export default function PracticeAdventurePage() {
   const [currentSpeaker, setCurrentSpeaker] = useState<string | null>(null);
   const [conversationStartTime, setConversationStartTime] = useState<Date | null>(null);
   const [isMounted, setIsMounted] = useState(false);
+
+  // Spanish Analysis Integration - Learner Profile
+  const [learnerProfile, setLearnerProfile] = useState<LearnerProfile>({
+    level: 'beginner',
+    comfortWithSlang: false,
+    needsMoreEnglish: true,
+    strugglingWords: [],
+    masteredPhrases: []
+  });
+  
+  // Determine scenario for Spanish analysis
+  const getAnalysisScenario = () => {
+    if (scenario?.id?.includes('taxi')) return 'taxi_ride';
+    if (scenario?.id?.includes('hotel')) return 'hotel_checkin';
+    if (scenario?.id?.includes('pharmacy')) return 'pharmacy';
+    if (scenario?.id?.includes('restaurant')) return 'restaurant';
+    if (scenario?.id?.includes('market')) return 'market';
+    return 'mexico_city_adventure'; // Default for Mexico City scenarios
+  };
+
+  // Initialize Spanish Analysis Conversation Engine
+  const {
+    sessionStats,
+    lastComprehensionFeedback,
+    conversationHistory,
+    processTranscript,
+    resetSession,
+    getFullSpanishAnalysis,
+    getDatabaseAnalysis
+  } = useConversationEngine({
+    learnerProfile,
+    onProfileUpdate: setLearnerProfile,
+    scenario: getAnalysisScenario() // Dynamic scenario based on adventure
+  });
+  
+  // Initialize Language Learning DB (guest mode for adventure) - only on client side
+  const [db, setDb] = useState<any>(null);
+  
+  useEffect(() => {
+    // Only initialize on client side to avoid server-side localStorage issues
+    if (typeof window !== 'undefined') {
+      setDb(LanguageLearningDB.createWithLocalStorage());
+    }
+  }, []);
   
   // Completion tracking
   const [completionChecklist, setCompletionChecklist] = useState<{
@@ -264,6 +325,13 @@ export default function PracticeAdventurePage() {
       setTranscripts(prev => {
         const updated = [...prev, newTranscript];
         
+        // 🆕 SPANISH ANALYSIS INTEGRATION
+        // Process transcript through Spanish analysis engine
+        if (role === 'user' || role === 'assistant') {
+          processTranscript(role, text);
+          console.log('[Spanish Analysis] Processed transcript:', { role, text: text.substring(0, 50) + '...' });
+        }
+        
         // ARCHITECTURAL FIX: Remove setTimeout timing dependency
         // Check completion immediately with current state
         console.log('[onTranscript] About to call completion functions');
@@ -440,6 +508,45 @@ export default function PracticeAdventurePage() {
                   </div>
                 )}
               </div>
+
+              {/* 🆕 SPANISH ANALYSIS INTEGRATION */}
+              <div>
+                <h3 className="font-semibold mb-2">Spanish Analysis</h3>
+                
+                {/* Real-time Feedback */}
+                {lastComprehensionFeedback && (
+                  <div className="mb-3">
+                    <SpanishFeedbackDisplay 
+                      feedback={lastComprehensionFeedback}
+                    />
+                  </div>
+                )}
+                
+                {/* Vocabulary Progress */}
+                <div className="mb-3">
+                  <VocabularyProgressBar 
+                    scenario={getAnalysisScenario()}
+                    analysis={getFullSpanishAnalysis()}
+                    sessionStats={sessionStats}
+                  />
+                </div>
+                
+                {/* Session Stats */}
+                <div className="bg-blue-50 p-3 rounded text-sm">
+                  <div className="flex justify-between items-center mb-1">
+                    <span>Responses:</span>
+                    <span className="font-semibold">{sessionStats.totalResponses}</span>
+                  </div>
+                  <div className="flex justify-between items-center mb-1">
+                    <span>Confidence:</span>
+                    <span className="font-semibold">{Math.round(sessionStats.averageConfidence * 100)}%</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span>Vocab Coverage:</span>
+                    <span className="font-semibold">{Math.round(sessionStats.essentialVocabCoverage * 100)}%</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -601,8 +708,42 @@ export default function PracticeAdventurePage() {
                         // Update time spent
                         updatedProgress.globalStats.totalTimeMinutes += conversationDuration;
                         
-                        // Save progress
+                        // Save conversation to Language Learning DB
+                        const saveConversationAsync = async () => {
+                          try {
+                            if (!db) {
+                              console.log('[Practice Adventure] Database not initialized, skipping save');
+                              return;
+                            }
+                            
+                            const fullAnalysis = getFullSpanishAnalysis();
+                            
+                            await db.saveConversation({
+                              title: `${scenario.title} - ${new Date().toLocaleTimeString()}`,
+                              persona: scenario.npc.name,
+                              transcript: transcripts,
+                              duration: conversationDuration * 60, // Convert to seconds
+                              language: 'es',
+                              scenario: getAnalysisScenario()
+                              // Note: analysis integration can be added later when types are aligned
+                            }, { id: 'adventure-guest' });
+                            
+                            // Update progress in LL-DB  
+                            await db.progress.update('adventure-guest', 'es', {
+                              totalMinutesPracticed: conversationDuration,
+                              conversationsCompleted: 1
+                              // Note: vocabulary tracking can be added when types are aligned
+                            });
+                            
+                            console.log('[Practice Adventure] Conversation saved to Language Learning DB');
+                          } catch (error) {
+                            console.error('[Practice Adventure] Failed to save conversation:', error);
+                          }
+                        };
+                        
+                        // Save both adventure progress and conversation
                         saveAdventureProgress(updatedProgress);
+                        saveConversationAsync(); // Don't await to avoid blocking UI
                         
                         // Show completion message
                         const completedCount = Object.values(updatedProgress.scenarios)
@@ -706,21 +847,28 @@ export default function PracticeAdventurePage() {
           </CardContent>
         </Card>
 
-        {/* Vocabulary Helper */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Essential Vocabulary</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              {scenario.vocabulary.essential.map((word: string, i: number) => (
-                <div key={i} className="bg-gray-50 rounded-lg p-3 text-center">
-                  <span className="font-medium">{word}</span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        {/* 🆕 ENHANCED VOCABULARY GUIDE - Spanish Analysis Integration */}
+        <div className="mb-6">
+          <VocabularyGuide 
+            scenario={getAnalysisScenario()}
+            wordsUsed={getFullSpanishAnalysis()?.wordsUsed.map(w => w.word) || []}
+          />
+        </div>
+
+        {/* 🆕 SESSION SUMMARY - Spanish Analysis Integration */}
+        {transcripts.length > 4 && ( // Show after meaningful conversation
+          <SessionSummaryWithAnalysis
+            analysis={getFullSpanishAnalysis()}
+            sessionStats={sessionStats}
+            duration={conversationStartTime ? Math.round((Date.now() - conversationStartTime.getTime()) / 1000 / 60) : 0}
+            onClose={() => {
+              // Reset session when summary is closed
+              resetSession();
+              setTranscripts([]);
+              setConversationStartTime(null);
+            }}
+          />
+        )}
       </div>
     </div>
   );

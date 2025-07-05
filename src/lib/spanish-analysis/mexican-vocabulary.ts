@@ -47,6 +47,27 @@ export const MEXICAN_EXPRESSIONS = {
 }
 
 // ============================================================================
+// Essential Vocabulary Guide (for user reference)
+// ============================================================================
+
+export const ESSENTIAL_TACO_VENDOR_VOCABULARY = {
+  ordering: ['quiero', 'me da', 'quisiera', 'deme', 'cuánto cuesta', 'cuánto es'],
+  meats: ['pastor', 'carnitas', 'suadero', 'bistec', 'pollo'],
+  toppings: ['con todo', 'sin cebolla', 'sin cilantro', 'salsa verde', 'salsa roja'],
+  quantities: ['uno', 'dos', 'tres', 'cuatro', 'cinco'],
+  payment: ['pesos', 'dinero', 'cambio', 'cuánto cuesta'],
+  service: ['para llevar', 'para aquí', 'gracias', 'por favor']
+};
+
+// Function to get vocabulary expectations for UI display
+export function getEssentialVocabularyGuide(scenario: string = 'taco_vendor') {
+  if (scenario === 'taco_vendor') {
+    return ESSENTIAL_TACO_VENDOR_VOCABULARY;
+  }
+  return ESSENTIAL_TACO_VENDOR_VOCABULARY; // Default fallback
+}
+
+// ============================================================================
 // Vocabulary by Category
 // ============================================================================
 
@@ -131,8 +152,20 @@ export const VOCABULARY_BY_CATEGORY: Record<VocabularyCategory, string[]> = {
 export const SCENARIO_VOCABULARIES: Record<string, ScenarioVocabulary> = {
   taco_vendor: {
     essential: [
-      'tacos', 'quiero', 'cuánto', 'cuesta', 'pesos', 'gracias',
-      'pastor', 'carnitas', 'con todo', 'para llevar'
+      // Ordering phrases
+      'quiero', 'me da', 'quisiera', 'deme', 'cuánto cuesta', 'cuánto es',
+      // Core meats
+      'pastor', 'carnitas', 'suadero', 'bistec', 'pollo',
+      // Basic items
+      'tacos', 'quesadillas', 'tortas',
+      // Toppings
+      'con todo', 'sin cebolla', 'sin cilantro', 'salsa verde', 'salsa roja',
+      // Numbers (essential)
+      'uno', 'dos', 'tres', 'cuatro', 'cinco',
+      // Payment
+      'pesos', 'dinero', 'cambio', 'cuesta',
+      // Service
+      'para llevar', 'para aquí', 'gracias', 'por favor'
     ],
     contextual: [
       'delicioso', 'picante', 'salsa', 'verde', 'roja', 'cebolla',
@@ -195,6 +228,123 @@ export const SCENARIO_VOCABULARIES: Record<string, ScenarioVocabulary> = {
     informal: [
       'órale', 'sale', 'está chido', 'qué padre', 'híjole',
       'no manches', 'está buenísimo'
+    ]
+  },
+
+  // ============================================================================
+  // Mexico City Adventure Scenarios
+  // ============================================================================
+
+  mexico_city_adventure: {
+    essential: [
+      // Transportation
+      'metro', 'metrobús', 'taxi', 'uber', 'pesero', 'microbús',
+      'estación', 'línea', 'dirección', 'destino', 'parada',
+      // Locations
+      'centro', 'centro histórico', 'zócalo', 'bellas artes', 'chapultepec',
+      'coyoacán', 'xochimilco', 'polanco', 'roma', 'condesa',
+      // Basic navigation
+      'dónde está', 'cómo llego', 'cuánto cuesta', 'cuánto tiempo',
+      'cerca', 'lejos', 'derecha', 'izquierda', 'recto', 'esquina',
+      // Money and shopping
+      'precio', 'caro', 'barato', 'regatear', 'mercado', 'tienda'
+    ],
+    contextual: [
+      // Tourism
+      'turista', 'visitar', 'conocer', 'museo', 'catedral', 'palacio',
+      'pirámides', 'teotihuacán', 'trajineras', 'mariachis',
+      // Culture
+      'cultura', 'arte', 'historia', 'tradición', 'folclor',
+      'artesanías', 'souvenirs', 'recuerdos',
+      // Food exploration
+      'probar', 'típico', 'tradicional', 'especialidad', 'local',
+      'street food', 'antojitos', 'elote', 'esquites', 'tamales'
+    ],
+    cultural: [
+      // Mexico City specific slang
+      'chilango', 'defeño', 'capitalino', 'órale', 'ándale pues',
+      'qué padre', 'padrísimo', 'chido', 'neta', 'híjole',
+      // Local expressions
+      'está con madre', 'está de pelos', 'no manches', 'sale',
+      'simón', 'nel', 'güey', 'wey', 'mano'
+    ],
+    formal: [
+      'disculpe', 'me podría ayudar', 'dónde queda', 'cómo puedo llegar',
+      'cuál es la mejor manera', 'me recomienda', 'muchas gracias',
+      'con permiso', 'perdón por molestar'
+    ],
+    informal: [
+      'oye', 'cómo le hago', 'por dónde', 'está lejos',
+      'sale pues', 'órale', 'qué onda', 'está chido'
+    ]
+  },
+
+  hotel_checkin: {
+    essential: [
+      'hotel', 'habitación', 'reservación', 'check-in', 'check-out',
+      'llave', 'tarjeta', 'piso', 'ascensor', 'baño', 'cama'
+    ],
+    contextual: [
+      'individual', 'doble', 'vista', 'mar', 'ciudad', 'wifi',
+      'desayuno', 'incluido', 'estacionamiento', 'gimnasio', 'alberca'
+    ],
+    cultural: [
+      'patrón', 'jefe', 'bienvenido', 'está todo en orden',
+      'que disfrute su estancia'
+    ],
+    formal: [
+      'tengo una reservación', 'me registra por favor',
+      'quisiera una habitación', 'cuál es el horario'
+    ],
+    informal: [
+      'tengo cuarto', 'mi habitación', 'dónde queda',
+      'está incluido'
+    ]
+  },
+
+  taxi_ride: {
+    essential: [
+      'taxi', 'taxista', 'destino', 'dirección', 'aeropuerto',
+      'hotel', 'centro', 'cuánto', 'tarifa', 'metro'
+    ],
+    contextual: [
+      'tráfico', 'rápido', 'ruta', 'conoce', 'atasque',
+      'tiempo', 'prisa', 'urgente', 'turista', 'foráneo'
+    ],
+    cultural: [
+      'jefe', 'patrón', 'amigo', 'güero', 'sale pues',
+      'ándale', 'órale', 'está con madre'
+    ],
+    formal: [
+      'me lleva a', 'cuánto me cobra', 'conoce la dirección',
+      'cuál es la mejor ruta', 'tiene cambio'
+    ],
+    informal: [
+      'vamos a', 'cuánto', 'conoces', 'por dónde',
+      'sale', 'órale'
+    ]
+  },
+
+  pharmacy: {
+    essential: [
+      'medicina', 'pastilla', 'tableta', 'dolor', 'farmacia', 'farmacéutico',
+      'receta', 'médico', 'cada', 'horas', 'dosis', 'síntomas'
+    ],
+    contextual: [
+      'antibiótico', 'jarabe', 'gotas', 'crema', 'pomada',
+      'aspirina', 'paracetamol', 'ibuprofeno', 'genérico', 'original'
+    ],
+    cultural: [
+      'licenciado', 'doctor', 'joven', 'señor farmacéutico',
+      'está muy caro', 'hay más barato', 'sale muy bien'
+    ],
+    formal: [
+      'necesito algo para', 'me duele', 'tengo dolor de',
+      'me puede dar', 'cada cuántas horas', 'cuánto cuesta'
+    ],
+    informal: [
+      'me da algo para', 'me duele', 'tengo esto',
+      'cada cuánto', 'cuánto', 'está caro'
     ]
   }
 }

@@ -9,13 +9,14 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useOpenAIRealtime } from '@/hooks/useOpenAIRealtime'
 import { useConversationEngine } from '@/hooks/useConversationEngine'
 import { generateAdaptivePrompt, LearnerProfile } from '@/lib/pedagogical-system'
-import { UnifiedStorageService } from '@/lib/unified-storage'
+import { LanguageLearningDB } from '@/lib/language-learning-db'
 import { safeFormatTime } from '@/lib/utils'
 
 // Enhanced UI Components for Spanish Analysis Feedback
 import { SpanishFeedbackDisplay } from '@/components/spanish-analysis/SpanishFeedbackDisplay'
 import { VocabularyProgressBar } from '@/components/spanish-analysis/VocabularyProgressBar'
 import { SessionSummaryWithAnalysis } from '@/components/spanish-analysis/SessionSummaryWithAnalysis'
+import { VocabularyGuide } from '@/components/spanish-analysis/VocabularyGuide'
 
 export default function PracticeWithAnalysisPage() {
   const router = useRouter()
@@ -66,10 +67,15 @@ export default function PracticeWithAnalysisPage() {
     enableInputTranscription: true, // 🔧 CRITICAL: Enable user speech transcription
     inputAudioTranscription: {
       model: 'whisper-1',
-      language: 'es' // 🇪🇸 Set Spanish language for better transcription
+      language: 'es' // 🇪🇸 Spanish (Español) - as requested
     },
     onTranscript: async (role, text) => {
-      console.log('[PracticeWithAnalysis] onTranscript fired:', { role, text: text.substring(0, 50) + '...' });
+      console.log('[PracticeWithAnalysis] onTranscript fired:', { 
+        role, 
+        text: text.substring(0, 50) + '...',
+        fullText: text,
+        hasSpanishChars: /[ñáéíóúü¿¡]/i.test(text)
+      });
       
       // Process through enhanced conversation engine
       const { displayText } = await processTranscript(role, text)
@@ -98,12 +104,42 @@ export default function PracticeWithAnalysisPage() {
   const [showSummary, setShowSummary] = useState(false)
   const disconnectRef = useRef(false)
 
+  // Initialize Language Learning DB
+  const createDB = () => {
+    if (typeof window === 'undefined') return null;
+    if (user) {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      if (supabaseUrl && supabaseKey) {
+        return LanguageLearningDB.createWithSupabase({ url: supabaseUrl, apiKey: supabaseKey });
+      }
+    } else {
+      return LanguageLearningDB.createWithLocalStorage();
+    }
+    return null;
+  };
+  
   // Load learner profile on mount
   useEffect(() => {
     const loadProfile = async () => {
-      const profile = await UnifiedStorageService.getLearnerProfile(user)
-      if (profile) {
-        setLearnerProfile(profile)
+      try {
+        const db = createDB();
+        if (db) {
+          const userId = user?.id || 'guest';
+          const profile = await db.profiles.get(userId, 'es');
+          if (profile) {
+            const learnerProfile = {
+              level: profile.level as 'beginner' | 'intermediate' | 'advanced',
+              comfortWithSlang: profile.preferences?.culturalContext || false,
+              needsMoreEnglish: profile.preferences?.supportLevel === 'heavy',
+              strugglingWords: profile.strugglingAreas || [],
+              masteredPhrases: profile.masteredConcepts || []
+            };
+            setLearnerProfile(learnerProfile);
+          }
+        }
+      } catch (error) {
+        console.log('[PracticeWithAnalysis] No existing profile, using defaults');
       }
     }
     loadProfile()
@@ -130,30 +166,43 @@ export default function PracticeWithAnalysisPage() {
     
     // Get full Spanish analysis
     const fullAnalysis = getFullSpanishAnalysis()
-    const databaseAnalysis = getDatabaseAnalysis()
     
     console.log('[PracticeWithAnalysis] Full Spanish analysis:', fullAnalysis)
-    console.log('[PracticeWithAnalysis] Database format:', databaseAnalysis)
 
-    // Save conversation with enhanced analysis
-    await UnifiedStorageService.saveConversation({
-      title: `${NPC_NAME} - ${new Date().toLocaleDateString()}`,
-      persona: NPC_NAME,
-      transcript: transcripts,
-      duration,
-      vocabularyAnalysis: databaseAnalysis?.vocabularyAnalysis,
-      struggleAnalysis: databaseAnalysis?.struggleAnalysis
-    }, user)
+    // Save conversation using Language Learning DB
+    const db = createDB();
+    if (db) {
+      await db.saveConversation({
+        title: `${NPC_NAME} - ${new Date().toLocaleDateString()}`,
+        persona: NPC_NAME,
+        transcript: transcripts,
+        duration,
+        language: 'es',
+        scenario: SCENARIO
+        // Note: analysis integration can be added later when types are aligned
+      }, user || { id: 'guest' });
 
-    // Update progress with Spanish metrics
-    await UnifiedStorageService.updateProgress({
-      minutes_practiced: Math.round(duration / 60),
-      conversations_completed: 1,
-      vocabulary: fullAnalysis?.wordsUsed.map(w => w.word) || []
-    }, user)
+      // Update progress with Spanish metrics  
+      const userId = user?.id || 'guest';
+      await db.progress.update(userId, 'es', {
+        totalMinutesPracticed: Math.round(duration / 60),
+        conversationsCompleted: 1
+        // Note: vocabulary tracking can be added when types are aligned
+      });
 
-    // Save learner profile
-    await UnifiedStorageService.saveLearnerProfile(learnerProfile, user)
+      // Save learner profile
+      await db.profiles.update(userId, 'es', {
+        level: learnerProfile.level,
+        strugglingAreas: learnerProfile.strugglingWords,
+        masteredConcepts: learnerProfile.masteredPhrases,
+        preferences: {
+          learningStyle: 'mixed',
+          pace: 'normal',
+          supportLevel: learnerProfile.needsMoreEnglish ? 'heavy' : 'moderate',
+          culturalContext: learnerProfile.comfortWithSlang
+        }
+      });
+    }
 
     setShowSummary(true)
   }
@@ -171,8 +220,14 @@ export default function PracticeWithAnalysisPage() {
   
   // Debug analysis data
   useEffect(() => {
-    console.log('[PracticeWithAnalysis] Current analysis:', currentAnalysis);
-    console.log('[PracticeWithAnalysis] Session stats:', sessionStats);
+    console.log('[PracticeWithAnalysis] Current analysis DETAILS:', {
+      hasAnalysis: !!currentAnalysis,
+      wordsUsed: currentAnalysis?.wordsUsed?.length || 0,
+      wordsUsedList: currentAnalysis?.wordsUsed?.slice(0, 5)?.map(w => w.word) || [],
+      essentialVocabCoverage: sessionStats.essentialVocabCoverage,
+      sessionStatsKeys: Object.keys(sessionStats)
+    });
+    console.log('[PracticeWithAnalysis] Full session stats:', sessionStats);
     console.log('[PracticeWithAnalysis] Conversation history length:', conversationHistory.length);
   }, [currentAnalysis, sessionStats, conversationHistory])
 
@@ -207,6 +262,14 @@ export default function PracticeWithAnalysisPage() {
           <div className="text-sm text-gray-600">
             {conversationStartTime && `${Math.floor((Date.now() - conversationStartTime.getTime()) / 60000)}:${String(Math.floor((Date.now() - conversationStartTime.getTime()) / 1000) % 60).padStart(2, '0')}`}
           </div>
+        </div>
+
+        {/* Vocabulary Guide */}
+        <div className="mb-6">
+          <VocabularyGuide 
+            scenario={SCENARIO}
+            wordsUsed={currentAnalysis?.wordsUsed?.map(w => w.word) || []}
+          />
         </div>
 
         {/* Spanish Analysis Dashboard */}

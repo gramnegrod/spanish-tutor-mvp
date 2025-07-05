@@ -1,13 +1,13 @@
 // ================================================================================
 // 🚨 CACHE CHECK: If you don't see this message, your browser has cached old code!
 // ================================================================================
-console.log('🔥🔥🔥 VERSION 7.0 LOADED - FUNCTION CALLING ONLY - NO TEXT INPUT 🔥🔥🔥');
-console.log('🔧 [DEBUG] app.js loading... VERSION 7.0 - FUNCTION CALLING ARCHITECTURE');
-console.log('🔧 [DEBUG] Cache check - if you do not see VERSION 7.0, clear browser cache');
-console.log('📢 [IMPORTANT] NO TEXT INPUT - VOICE + DOCUMENT ANALYSIS ONLY');
+console.log('🔥🔥🔥 VERSION 4.0 LOADED - FRESH FILE - DUAL MODEL ARCHITECTURE ACTIVE 🔥🔥🔥');
+console.log('🔧 [DEBUG] app-v4-fresh.js loading... VERSION 4.0 - FRESH FILE - DUAL MODEL FIX');
+console.log('🔧 [DEBUG] Cache check - if you do not see VERSION 4.0, refresh with Ctrl+Shift+R');
 console.log('================================================================================');
 
-// Function calling architecture - no text input needed
+// Make sendTextMessage available globally for onclick
+window.sendTextMessage = null; // Will be set later
 
 // Simple WebRTC connection for OpenAI Realtime API
 class SimpleRealtimeConnection {
@@ -381,7 +381,8 @@ class SimpleRealtimeConnection {
                 const responseId = message.response?.id || message.response_id;
                 console.log('Response complete:', responseId, 'Current ID:', this.currentResponseId);
                 
-                // Note: removed isProcessingTextResponse as we no longer use text input
+                // Always reset the flag regardless of ID match
+                isProcessingTextResponse = false;
                 
                 // Clear current response ID when done
                 if (responseId === this.currentResponseId || !responseId) {
@@ -404,14 +405,9 @@ class SimpleRealtimeConnection {
             // Parse the function arguments
             const { document_content, user_question } = typeof args === 'string' ? JSON.parse(args) : args;
             
-            // Get document content from textarea if not provided in function call
-            const documentTextarea = document.getElementById('document-content');
-            const actualDocumentContent = document_content || documentTextarea?.value || '';
-            
             console.log('📚 Analyzing document:', {
-                contentLength: actualDocumentContent?.length || 0,
-                question: user_question?.substring(0, 100) + '...',
-                source: document_content ? 'function_args' : 'textarea'
+                contentLength: document_content?.length || 0,
+                question: user_question?.substring(0, 100) + '...'
             });
             
             // Show user that we're analyzing
@@ -424,7 +420,7 @@ class SimpleRealtimeConnection {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    bookContent: actualDocumentContent,
+                    bookContent: document_content,
                     userQuestion: user_question,
                     npcPersonality: window.selectedNPC
                 })
@@ -525,23 +521,15 @@ PRACTICAL INFO: ${npc.prices_hours}
 
 SAMPLE Q&A FOR REFERENCE: ${npc.sample_qa}
 
-DOCUMENT ANALYSIS CAPABILITY: You have access to an advanced analyze_document function that can process large texts, books, articles, or documents. The user can provide document content via a text area on the page. When they say phrases like the ones below, immediately call the analyze_document function:
+DOCUMENT ANALYSIS CAPABILITY: You have access to an advanced analyze_document function that can process large texts, books, articles, or documents. When visitors mention having text to analyze or ask questions about written content, use this function to provide detailed analysis relating the content to London history and culture.
 
-TRIGGER PHRASES (call analyze_document immediately when you hear these):
-- "analyze this document"
-- "analyze the document" 
-- "look at this document"
-- "review this document"
-- "what does this document say"
-- "examine this text"
-- "analyze this text"
-- "tell me about this document"
+Examples of when to use analyze_document:
+- "I have this passage about Victorian London..."
+- "Can you analyze this book chapter for me?"
+- "I found this historical document, what does it mean?"
+- "Here's some text about London, can you explain it?"
 
-When you hear these phrases, immediately call analyze_document with:
-- document_content: "" (empty - the function will get it from the page)  
-- user_question: [the user's question or "Please analyze this document"]
-
-Do NOT ask them to share the content - they've already provided it in the text area.
+When using the function, extract the document content and the user's specific question, then provide your analysis in character as a knowledgeable London guide.
 
 Remember: Stay completely in character as this specific guide. Use the tour content and current events naturally in conversation. Answer visitor questions using the provided information.`;
     
@@ -792,40 +780,10 @@ document.addEventListener('keyup', (event) => {
 });
 
 // ================================================================================
-// FUNCTION CALLING ARCHITECTURE - Document Analysis  
+// FUNCTION CALLING ARCHITECTURE - Voice-Based Document Analysis  
 // ================================================================================
-// Document analysis via function calls:
-// Method 1: User speaks → AI calls analyze_document() → Backend processes → Voice response  
-// Method 2: User clicks button → Manually trigger analyze_document() → Voice response
-
-// Manual document analysis trigger
-function triggerDocumentAnalysis() {
-    console.log('🔘 Manual document analysis triggered');
-    
-    if (!realtimeConnection || !realtimeConnection.isConnected) {
-        alert('Please start a conversation first');
-        return;
-    }
-    
-    const documentTextarea = document.getElementById('document-content');
-    const documentContent = documentTextarea?.value?.trim();
-    
-    if (!documentContent) {
-        alert('Please paste some document content first');
-        return;
-    }
-    
-    const defaultQuestion = "Please analyze this document and explain how it relates to London history and culture.";
-    
-    // Manually call the document analysis function
-    realtimeConnection.handleDocumentAnalysis({
-        document_content: documentContent,
-        user_question: defaultQuestion
-    }, 'manual_' + Date.now());
-}
-
-// Make function globally available
-window.triggerDocumentAnalysis = triggerDocumentAnalysis;
+// All document analysis now handled via voice-triggered function calls:
+// User speaks → AI calls analyze_document() → Backend processes → Voice response
 
 // ================================================================================
 // UTILITY FUNCTIONS

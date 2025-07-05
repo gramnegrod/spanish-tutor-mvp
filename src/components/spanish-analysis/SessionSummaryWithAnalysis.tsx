@@ -29,7 +29,59 @@ export function SessionSummaryWithAnalysis({
           <p className="text-gray-600">Here's your Spanish learning summary</p>
         </div>
 
-        {/* Key Metrics */}
+        {/* Vocabulary Achievement - Primary Focus */}
+        <Card className={`border-2 ${sessionStats.essentialVocabCoverage >= 0.25 ? 'border-green-500 bg-green-50' : 'border-yellow-500 bg-yellow-50'}`}>
+          <CardContent className="p-6 text-center">
+            <Target className={`w-12 h-12 mx-auto mb-3 ${sessionStats.essentialVocabCoverage >= 0.25 ? 'text-green-500' : 'text-yellow-500'}`} />
+            <div className="text-4xl font-bold mb-2">
+              {Math.round(sessionStats.essentialVocabCoverage * 100)}%
+            </div>
+            <div className="text-lg font-medium mb-2">Essential Vocabulary Coverage</div>
+            <div className={`text-sm font-medium ${sessionStats.essentialVocabCoverage >= 0.25 ? 'text-green-700' : 'text-yellow-700'}`}>
+              {sessionStats.essentialVocabCoverage >= 0.25 
+                ? '🎉 Goal Achieved! (Target: 25%+)'
+                : `Keep going! (Target: 25%, You: ${Math.round(sessionStats.essentialVocabCoverage * 100)}%)`
+              }
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Copy-Friendly Session Summary */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Session Summary (Copy-Friendly)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="bg-gray-50 p-4 rounded border font-mono text-sm select-all">
+              🎯 VOCABULARY COVERAGE: {Math.round(sessionStats.essentialVocabCoverage * 100)}% (Target: 25%)
+              {sessionStats.essentialVocabCoverage >= 0.25 ? ' ✅ GOAL ACHIEVED!' : ' ⏳ Keep practicing!'}
+              <br />
+              ⏱️  PRACTICE TIME: {Math.floor(duration / 60)}:{String(duration % 60).padStart(2, '0')} minutes
+              <br />
+              🗣️  SPANISH WORDS: {sessionStats.spanishWordsUsed}
+              <br />
+              🇲🇽 MEXICAN EXPRESSIONS: {sessionStats.mexicanExpressionsUsed}
+              <br />
+              📊 SUCCESS RATE: {sessionStats.totalResponses > 0 ? Math.round((sessionStats.goodResponses / sessionStats.totalResponses) * 100) : 0}%
+              <br />
+              💪 CONFIDENCE: {Math.round(sessionStats.averageConfidence * 100)}%
+              <br />
+              🔥 STREAK: {sessionStats.streakCount}
+              {analysis && analysis.wordsUsed.length > 0 && (
+                <>
+                  <br />
+                  <br />
+                  📝 WORDS USED: {analysis.wordsUsed.map(w => w.word).join(', ')}
+                </>
+              )}
+            </div>
+            <p className="text-xs text-gray-600 mt-2">
+              💡 Tip: You can select and copy this summary to share your progress!
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Secondary Metrics */}
         <div className="grid md:grid-cols-3 gap-4">
           <Card>
             <CardContent className="p-4 text-center">
@@ -123,35 +175,6 @@ export function SessionSummaryWithAnalysis({
                 </div>
               )}
 
-              {/* Session Metrics */}
-              <div className="grid grid-cols-2 gap-4 pt-4 border-t">
-                <div>
-                  <div className="text-xs text-gray-600">Vocabulary Coverage</div>
-                  <div className="text-lg font-medium">
-                    {Math.round(sessionStats.essentialVocabCoverage * 100)}%
-                  </div>
-                </div>
-                <div>
-                  <div className="text-xs text-gray-600">Overall Confidence</div>
-                  <div className="text-lg font-medium">
-                    {Math.round(sessionStats.averageConfidence * 100)}%
-                  </div>
-                </div>
-                <div>
-                  <div className="text-xs text-gray-600">Success Rate</div>
-                  <div className="text-lg font-medium">
-                    {sessionStats.totalResponses > 0 
-                      ? Math.round((sessionStats.goodResponses / sessionStats.totalResponses) * 100)
-                      : 0}%
-                  </div>
-                </div>
-                <div>
-                  <div className="text-xs text-gray-600">Streak</div>
-                  <div className="text-lg font-medium">
-                    {sessionStats.streakCount} {sessionStats.streakCount >= 3 && '🔥'}
-                  </div>
-                </div>
-              </div>
             </CardContent>
           </Card>
         )}

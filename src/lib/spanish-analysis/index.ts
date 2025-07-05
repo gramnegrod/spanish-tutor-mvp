@@ -114,7 +114,7 @@ export function createCustomAnalyzer(config: SpanishAnalyzerConfig): SpanishConv
 // ============================================================================
 
 import type { ConversationTurn, AnalysisContext } from './types'
-import { getScenarioVocabulary } from './mexican-vocabulary'
+import { getScenarioVocabulary, categorizeFormalityLevel } from './mexican-vocabulary'
 
 /**
  * Quick vocabulary analysis for any Spanish text
@@ -175,9 +175,35 @@ export function checkEssentialVocabulary(text: string, scenario: string): {
   const scenarioVocab = getScenarioVocabulary(scenario)
   const lowerText = text.toLowerCase()
   
-  const used = scenarioVocab.essential.filter(word => lowerText.includes(word))
-  const missing = scenarioVocab.essential.filter(word => !lowerText.includes(word))
+  // Improved matching for phrases and individual words
+  const used = scenarioVocab.essential.filter(word => {
+    // Handle multi-word phrases
+    if (word.includes(' ')) {
+      return lowerText.includes(word)
+    }
+    // Handle individual words with word boundaries to avoid partial matches
+    const wordRegex = new RegExp(`\\b${word}\\b`, 'i')
+    return wordRegex.test(lowerText)
+  })
+  
+  const missing = scenarioVocab.essential.filter(word => {
+    if (word.includes(' ')) {
+      return !lowerText.includes(word)
+    }
+    const wordRegex = new RegExp(`\\b${word}\\b`, 'i')
+    return !wordRegex.test(lowerText)
+  })
+  
   const coverage = scenarioVocab.essential.length > 0 ? used.length / scenarioVocab.essential.length : 0
+
+  console.log('[checkEssentialVocabulary] Analysis:', {
+    scenario,
+    totalEssential: scenarioVocab.essential.length,
+    used: used.length,
+    coverage: Math.round(coverage * 100) + '%',
+    usedWords: used,
+    textSample: lowerText.substring(0, 100) + '...'
+  })
 
   return { used, missing, coverage }
 }
@@ -209,7 +235,7 @@ export function analyzeFormalityLevel(text: string): {
 // Integration Helpers for Enhanced Database
 // ============================================================================
 
-import type { VocabularyAnalysisResult, StruggleAnalysisResult } from './types'
+import type { VocabularyAnalysisResult, StruggleAnalysisResult, SpanishConversationAnalysis } from './types'
 import type { LearnerProfile } from '../pedagogical-system'
 
 /**

@@ -56,7 +56,7 @@ export class OpenAIRealtimeService {
       enableInputTranscription: false,
       inputAudioTranscription: {
         model: 'whisper-1',
-        language: 'es' // Default to Spanish for Spanish learning app
+        language: 'es' // 🇪🇸 Spanish (Español)
       },
       ...config
     };

@@ -10,6 +10,8 @@ export interface Conversation {
   transcript: ConversationTranscript[]
   duration: number
   analysis?: any
+  vocabulary_analysis?: any
+  struggle_analysis?: any
   created_at: string
   updated_at: string
 }
@@ -49,6 +51,8 @@ export const conversationService = {
     persona: string
     transcript: ConversationTranscript[]
     duration: number
+    vocabulary_analysis?: any
+    struggle_analysis?: any
   }) {
     const { data: conversation, error } = await supabase
       .from('conversations')
