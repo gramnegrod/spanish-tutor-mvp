@@ -180,7 +180,14 @@ export class ConversationService {
   }
 
   private validateTranscript(transcript: any[]): void {
+    console.log('[ConversationService] Validating transcript with', transcript.length, 'entries')
+    
     transcript.forEach((entry, index) => {
+      // Debug log for problematic entries
+      if (index >= 58 && index <= 62) {
+        console.log(`[ConversationService] Entry ${index}:`, JSON.stringify(entry, null, 2))
+      }
+      
       if (!entry.speaker || !['user', 'assistant', 'system'].includes(entry.speaker)) {
         throw new ValidationError(
           `Invalid speaker at index ${index}`, 
@@ -190,6 +197,12 @@ export class ConversationService {
       }
 
       if (!entry.text || typeof entry.text !== 'string') {
+        console.error(`[ConversationService] Invalid text at index ${index}:`, {
+          entry,
+          text: entry.text,
+          textType: typeof entry.text,
+          hasText: 'text' in entry
+        })
         throw new ValidationError(
           `Invalid text at index ${index}`, 
           'transcript.text', 

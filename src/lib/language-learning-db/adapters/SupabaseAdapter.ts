@@ -4,7 +4,8 @@
  * Implements StorageAdapter interface for Supabase backend
  */
 
-import { createClient, SupabaseClient } from '@supabase/supabase-js'
+import { SupabaseClient } from '@supabase/supabase-js'
+import { getSupabaseClient } from '@/lib/supabase-client'
 import type {
   StorageAdapter,
   ConversationData,
@@ -24,22 +25,8 @@ export class SupabaseAdapter implements StorageAdapter {
   private supabase: SupabaseClient
 
   constructor(connection?: { url: string; apiKey: string }) {
-    if (!connection) {
-      // Use environment variables if no connection provided
-      const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-      const apiKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-      
-      if (!url || !apiKey) {
-        throw new StorageError(
-          'Supabase connection details not provided',
-          'constructor'
-        )
-      }
-      
-      this.supabase = createClient(url, apiKey)
-    } else {
-      this.supabase = createClient(connection.url, connection.apiKey)
-    }
+    // Always use the singleton client to avoid multiple instances
+    this.supabase = getSupabaseClient()
   }
 
   // ============================================================================
@@ -263,18 +250,63 @@ export class SupabaseAdapter implements StorageAdapter {
 
   async updateProgress(userId: string, language: string, updates: Partial<UserProgress>): Promise<UserProgress> {
     try {
-      const updateData = {
-        user_id: userId,
-        language,
-        ...updates,
-        updated_at: new Date().toISOString()
+      // Transform camelCase to snake_case for database
+      const dbUpdates: any = {}
+      if (updates.totalMinutesPracticed !== undefined) {
+        dbUpdates.total_minutes_practiced = updates.totalMinutesPracticed
       }
-
-      const { data, error } = await this.supabase
-        .from('user_progress')
-        .upsert(updateData)
-        .select()
+      if (updates.conversationsCompleted !== undefined) {
+        dbUpdates.conversations_completed = updates.conversationsCompleted
+      }
+      
+      // First check if record exists
+      const { data: existing } = await this.supabase
+        .from('progress')
+        .select('*')
+        .eq('user_id', userId)
         .single()
+
+      let data, error
+      
+      if (existing) {
+        // Update existing record - increment values
+        const updatePayload: any = {
+          language,
+          updated_at: new Date().toISOString()
+        }
+        
+        if (dbUpdates.total_minutes_practiced !== undefined) {
+          updatePayload.total_minutes_practiced = (existing.total_minutes_practiced || 0) + dbUpdates.total_minutes_practiced
+        }
+        if (dbUpdates.conversations_completed !== undefined) {
+          updatePayload.conversations_completed = (existing.conversations_completed || 0) + dbUpdates.conversations_completed
+        }
+        
+        const result = await this.supabase
+          .from('progress')
+          .update(updatePayload)
+          .eq('user_id', userId)
+          .select()
+          .single()
+        
+        data = result.data
+        error = result.error
+      } else {
+        // Insert new record
+        const result = await this.supabase
+          .from('progress')
+          .insert({
+            user_id: userId,
+            language,
+            ...dbUpdates,
+            updated_at: new Date().toISOString()
+          })
+          .select()
+          .single()
+        
+        data = result.data
+        error = result.error
+      }
 
       if (error) {
         throw new StorageError(
@@ -341,18 +373,20 @@ export class SupabaseAdapter implements StorageAdapter {
         .select('*')
         .eq('user_id', userId)
         .eq('language', language)
-        .single()
+        .limit(1)
 
       if (error) {
-        if (error.code === 'PGRST116') return null // Not found
         throw new StorageError(
           `Failed to get profile: ${error.message}`,
           'getProfile',
           { error, userId, language }
         )
       }
+      
+      // Return null if no profile found, or the first profile if found
+      if (!data || data.length === 0) return null
 
-      return data ? this.transformProfile(data) : null
+      return this.transformProfile(data[0])
     } catch (error) {
       if (error instanceof StorageError) throw error
       throw new StorageError(
@@ -426,9 +460,31 @@ export class SupabaseAdapter implements StorageAdapter {
         .eq('user_id', userId)
         .eq('language', language)
         .select()
-        .single()
 
       if (error) {
+        // If profile doesn't exist, create it
+        if (error.code === 'PGRST116') {
+          const newProfile: LearnerProfile = {
+            userId,
+            language,
+            level: updates.level || 'beginner',
+            goals: updates.goals || [],
+            preferences: updates.preferences || {
+              learningStyle: 'mixed',
+              pace: 'normal',
+              supportLevel: 'moderate',
+              culturalContext: true
+            },
+            strugglingAreas: updates.strugglingAreas || [],
+            masteredConcepts: updates.masteredConcepts || [],
+            commonErrors: updates.commonErrors || [],
+            adaptations: updates.adaptations || {},
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          }
+          return this.saveProfile(newProfile)
+        }
+        
         throw new StorageError(
           `Failed to update profile: ${error.message}`,
           'updateProfile',
@@ -436,7 +492,31 @@ export class SupabaseAdapter implements StorageAdapter {
         )
       }
 
-      return this.transformProfile(data)
+      if (!data || data.length === 0) {
+        // No profile exists, create one
+        const newProfile: LearnerProfile = {
+          userId,
+          language,
+          level: updates.level || 'beginner',
+          goals: updates.goals || [],
+          preferences: updates.preferences || {
+            learningStyle: 'mixed',
+            pace: 'normal',
+            supportLevel: 'moderate',
+            culturalContext: true
+          },
+          strugglingAreas: updates.strugglingAreas || [],
+          masteredConcepts: updates.masteredConcepts || [],
+          commonErrors: updates.commonErrors || [],
+          adaptations: updates.adaptations || {},
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }
+        return this.saveProfile(newProfile)
+      }
+
+      // If multiple profiles exist (shouldn't happen), just return the first one
+      return this.transformProfile(data[0])
     } catch (error) {
       if (error instanceof StorageError) throw error
       throw new StorageError(
