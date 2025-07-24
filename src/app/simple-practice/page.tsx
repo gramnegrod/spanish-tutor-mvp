@@ -3,8 +3,13 @@
 import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Mic, Loader2 } from 'lucide-react'
 import { OpenAIRealtimeService } from '@/services/openai-realtime'
+import { 
+  LoadingState, 
+  ConnectionStatus, 
+  ErrorDisplay, 
+  ConversationEmptyState 
+} from '@/components/shared'
 
 export default function SimplePracticePage() {
   const [isConnected, setIsConnected] = useState(false)
@@ -24,6 +29,7 @@ export default function SimplePracticePage() {
       console.log('[SimplePractice] Creating service...')
       
       const service = new OpenAIRealtimeService({
+        tokenEndpoint: '/api/session',
         instructions: `You are a friendly Mexican taco vendor (taquero) in Mexico City.
           Name: Don Roberto
           Personality: Warm, patient, loves to chat
@@ -113,15 +119,16 @@ export default function SimplePracticePage() {
                   </div>
                 ))}
                 {transcripts.length === 0 && (
-                  <p className="text-gray-400">Conversation will appear here...</p>
+                  <ConversationEmptyState isConnected={isConnected} />
                 )}
               </div>
               
-              {error && (
-                <div className="mt-2 p-2 bg-red-100 text-red-700 rounded">
-                  Error: {error}
-                </div>
-              )}
+              <ErrorDisplay 
+                error={error}
+                onDismiss={() => setError(null)}
+                variant="card"
+                className="mt-2"
+              />
             </CardContent>
           </Card>
           
@@ -136,30 +143,11 @@ export default function SimplePracticePage() {
             <CardContent className="flex flex-col items-center space-y-6">
               <audio ref={audioRef} autoPlay hidden />
               
-              <div className="text-center">
-                {isConnected ? (
-                  <div className="flex flex-col items-center gap-4">
-                    <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center">
-                      <Mic className="h-10 w-10 text-green-600" />
-                    </div>
-                    <p className="text-sm text-green-600 font-medium">Connected - Speak anytime</p>
-                  </div>
-                ) : isConnecting ? (
-                  <div className="flex flex-col items-center gap-4">
-                    <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center">
-                      <Loader2 className="h-10 w-10 text-gray-400 animate-spin" />
-                    </div>
-                    <p className="text-sm text-gray-600">Connecting...</p>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center gap-4">
-                    <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center">
-                      <Mic className="h-10 w-10 text-gray-400" />
-                    </div>
-                    <p className="text-sm text-gray-500 font-medium">Not connected</p>
-                  </div>
-                )}
-              </div>
+              <ConnectionStatus 
+                isConnected={isConnected}
+                isConnecting={isConnecting}
+                size="md"
+              />
               
               <div className="space-x-2">
                 <Button 
