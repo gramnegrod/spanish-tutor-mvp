@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { OpenAIRealtimeService } from '@/services/openai-realtime'
+import { OpenAIRealtimeService } from '@openai-realtime/webrtc'
 import { 
   LoadingState, 
   ConnectionStatus, 
