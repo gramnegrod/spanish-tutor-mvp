@@ -1,0 +1,899 @@
+/**
+ * OpenAI Realtime Service
+ * 
+ * Main orchestrator class that combines SessionManager and WebRTCManager
+ * to provide a unified, high-level API for managing OpenAI Realtime API 
+ * sessions with WebRTC support.
+ * 
+ * This service handles the complete lifecycle of realtime conversations,
+ * including session management, WebRTC connections, audio streaming,
+ * and event coordination between the different components.
+ */
+
+import { SessionManager, type SessionConfig, type SessionState, type SessionEvents } from './SessionManager';
+import { WebRTCManager, type WebRTCConfig, type ConnectionState, type WebRTCEvents } from './WebRTCManager';
+import { TokenManager, type TokenConfig } from './TokenManager';
+import type { 
+  AnyEvent,
+  RealtimeError, 
+  AudioFormat, 
+  RealtimeVoice,
+  SessionLimitsConfig,
+  TelemetryConfig,
+  ConnectionConfig
+} from '../types';
+
+/**
+ * Configuration for the OpenAI Realtime Service
+ */
+export interface RealtimeServiceConfig {
+  /** Session configuration for OpenAI API */
+  session: SessionConfig;
+  /** WebRTC configuration for real-time communication */
+  webrtc?: WebRTCConfig;
+  /** Connection configuration including token endpoint */
+  connection?: Partial<ConnectionConfig>;
+  /** Session limits configuration */
+  sessionLimits?: SessionLimitsConfig;
+  /** Telemetry configuration */
+  telemetry?: TelemetryConfig;
+  /** Enable automatic session recovery on connection loss */
+  autoReconnect?: boolean;
+  /** Maximum number of reconnection attempts */
+  maxReconnectAttempts?: number;
+  /** Delay between reconnection attempts in milliseconds */
+  reconnectDelay?: number;
+  /** Enable debug logging */
+  debug?: boolean;
+  /** Custom event handlers */
+  eventHandlers?: Partial<RealtimeServiceEvents>;
+}
+
+/**
+ * State of the OpenAI Realtime Service
+ */
+export interface RealtimeServiceState {
+  /** Current service status */
+  status: 'disconnected' | 'connecting' | 'connected' | 'error' | 'reconnecting';
+  /** Session state from SessionManager */
+  session: SessionState;
+  /** WebRTC connection state */
+  webrtc: ConnectionState;
+  /** Last error that occurred */
+  lastError: Error | null;
+  /** Service metrics */
+  metrics: ServiceMetrics;
+  /** Reconnection attempt count */
+  reconnectAttempts: number;
+  /** Service start timestamp */
+  startedAt: Date | null;
+}
+
+/**
+ * Service-level metrics
+ */
+export interface ServiceMetrics {
+  /** Total session duration in milliseconds */
+  totalDuration: number;
+  /** Number of messages sent */
+  messagesSent: number;
+  /** Number of messages received */
+  messagesReceived: number;
+  /** Total audio data sent in bytes */
+  audioBytesSent: number;
+  /** Total audio data received in bytes */
+  audioBytesReceived: number;
+  /** Average response latency in milliseconds */
+  averageLatency: number;
+  /** Number of reconnection attempts */
+  reconnectionAttempts: number;
+  /** Success rate as percentage */
+  successRate: number;
+}
+
+/**
+ * Event handlers for the OpenAI Realtime Service
+ */
+export interface RealtimeServiceEvents {
+  /** Service successfully connected and ready */
+  ready: () => void;
+  /** Service disconnected */
+  disconnected: (reason?: string) => void;
+  /** Service error occurred */
+  error: (error: Error) => void;
+  /** Service state changed */
+  stateChanged: (state: RealtimeServiceState) => void;
+  /** Reconnection attempt started */
+  reconnecting: (attempt: number, maxAttempts: number) => void;
+  /** Reconnection successful */
+  reconnected: () => void;
+  /** Reconnection failed */
+  reconnectionFailed: (error: Error) => void;
+  /** Audio input received from microphone */
+  audioInput: (audioData: ArrayBuffer) => void;
+  /** Audio output received from OpenAI */
+  audioOutput: (audioData: ArrayBuffer) => void;
+  /** Audio track received from WebRTC (for direct playback) */
+  audioTrackReceived: (track: MediaStreamTrack) => void;
+  /** Text message received from OpenAI */
+  textReceived: (text: string) => void;
+  /** Function call requested by OpenAI */
+  functionCall: (name: string, args: Record<string, any>, callId: string) => void;
+  /** Conversation updated */
+  conversationUpdated: (items: any[]) => void;
+  /** Metrics updated */
+  metricsUpdated: (metrics: ServiceMetrics) => void;
+}
+
+/**
+ * Main OpenAI Realtime Service class
+ * 
+ * Provides a high-level API for managing OpenAI Realtime API sessions
+ * with WebRTC support. Orchestrates SessionManager and WebRTCManager
+ * to provide a unified interface for real-time AI conversations.
+ */
+export class OpenAIRealtimeService {
+  private sessionManager: SessionManager;
+  private webrtcManager: WebRTCManager;
+  private config: RealtimeServiceConfig;
+  private state: RealtimeServiceState;
+  private eventListeners: Map<keyof RealtimeServiceEvents, Set<Function>>;
+  private reconnectTimer: NodeJS.Timeout | null;
+  private metricsTimer: NodeJS.Timeout | null;
+  private isDisposed: boolean;
+
+  /**
+   * Create a new OpenAI Realtime Service instance
+   * 
+   * @param config - Service configuration
+   */
+  constructor(config: RealtimeServiceConfig) {
+    this.config = {
+      autoReconnect: true,
+      maxReconnectAttempts: 3,
+      reconnectDelay: 2000,
+      debug: false,
+      ...config
+    };
+
+    // Initialize managers with proper configuration
+    this.sessionManager = new SessionManager();
+    
+    // Create WebRTC config with token endpoint support
+    const webrtcConfig = this.createWebRTCConfig(config);
+    this.webrtcManager = new WebRTCManager(webrtcConfig);
+    
+    // Initialize state
+    this.state = {
+      status: 'disconnected',
+      session: this.sessionManager.getState(),
+      webrtc: this.webrtcManager.getConnectionState(),
+      lastError: null,
+      metrics: this.createInitialMetrics(),
+      reconnectAttempts: 0,
+      startedAt: null
+    };
+
+    this.eventListeners = new Map();
+    this.reconnectTimer = null;
+    this.metricsTimer = null;
+    this.isDisposed = false;
+
+    // Setup event handlers
+    this.setupEventHandlers();
+    
+    // Register custom event handlers if provided
+    if (this.config.eventHandlers) {
+      Object.entries(this.config.eventHandlers).forEach(([event, handler]) => {
+        if (handler) {
+          this.on(event as keyof RealtimeServiceEvents, handler);
+        }
+      });
+    }
+  }
+
+  /**
+   * Start the realtime service
+   * 
+   * Initializes WebRTC connection and starts a new session with OpenAI.
+   * 
+   * @returns Promise that resolves when service is ready
+   */
+  async start(): Promise<void> {
+    if (this.isDisposed) {
+      throw new Error('Service has been disposed');
+    }
+
+    if (this.state.status !== 'disconnected') {
+      throw new Error(`Cannot start service in ${this.state.status} state`);
+    }
+
+    this.log('Starting OpenAI Realtime Service...');
+    this.updateState({ status: 'connecting', startedAt: new Date() });
+
+    try {
+      // Initialize WebRTC connection (includes negotiation)
+      await this.webrtcManager.initialize();
+      this.log('WebRTC initialized and negotiated');
+
+      // Wait for data channel to be ready
+      await this.waitForDataChannel();
+      this.log('Data channel ready');
+
+      // Send session configuration through data channel
+      await this.sendSessionConfig();
+      this.log('Session configuration sent');
+
+      // Update state and notify only when fully connected
+      this.updateState({ status: 'connected', reconnectAttempts: 0 });
+      this.startMetricsCollection();
+      this.emit('ready');
+      
+      this.log('Service ready and connected');
+    } catch (error) {
+      const serviceError = error instanceof Error ? error : new Error('Unknown startup error');
+      this.handleError(serviceError);
+      throw serviceError;
+    }
+  }
+
+  /**
+   * Stop the realtime service
+   * 
+   * Cleanly shuts down the session and WebRTC connection.
+   * 
+   * @param reason - Optional reason for stopping
+   */
+  async stop(reason?: string): Promise<void> {
+    this.log(`Stopping service${reason ? `: ${reason}` : ''}`);
+    
+    // Clear timers
+    this.clearReconnectTimer();
+    this.stopMetricsCollection();
+
+    // Stop WebRTC (this will close data channel and peer connection)
+    if (this.webrtcManager.isConnected()) {
+      await this.webrtcManager.close(reason);
+    }
+
+    this.updateState({ status: 'disconnected', startedAt: null });
+    this.emit('disconnected', reason);
+    
+    this.log('Service stopped');
+  }
+
+  /**
+   * Send text message to OpenAI
+   * 
+   * @param text - Text message to send
+   */
+  async sendText(text: string): Promise<void> {
+    if (!this.isConnected()) {
+      throw new Error('Service is not connected');
+    }
+
+    // Send through data channel when connected
+    // First, send the user message
+    const message = {
+      type: 'conversation.item.create',
+      item: {
+        type: 'message',
+        role: 'user',
+        content: [{
+          type: 'input_text',
+          text: text
+        }]
+      }
+    };
+    
+    this.webrtcManager.sendData(JSON.stringify(message));
+    
+    // Then trigger response generation
+    const responseRequest = {
+      type: 'response.create'
+    };
+    this.webrtcManager.sendData(JSON.stringify(responseRequest));
+    
+    this.updateMetrics({ messagesSent: this.state.metrics.messagesSent + 1 });
+    this.log(`Sent text: ${text.substring(0, 50)}${text.length > 50 ? '...' : ''}`);
+  }
+
+  /**
+   * Send audio data to OpenAI
+   * 
+   * @param audioData - Audio data buffer
+   */
+  async sendAudio(audioData: ArrayBuffer): Promise<void> {
+    if (!this.isConnected()) {
+      throw new Error('Service is not connected');
+    }
+
+    // Audio is sent through WebRTC peer connection, not data channel
+    // The WebRTC manager handles this through the audio track
+    this.updateMetrics({ 
+      audioBytesSent: this.state.metrics.audioBytesSent + audioData.byteLength 
+    });
+    this.emit('audioInput', audioData);
+    this.log(`Sent audio: ${audioData.byteLength} bytes`);
+  }
+
+  /**
+   * Update session configuration
+   * 
+   * @param updates - Configuration updates
+   */
+  async updateConfiguration(updates: Partial<SessionConfig>): Promise<void> {
+    if (!this.isConnected()) {
+      throw new Error('No active session to update');
+    }
+
+    // Send configuration update through data channel
+    const updateMessage = {
+      type: 'session.update',
+      session: {
+        ...(updates.modalities && { modalities: updates.modalities }),
+        ...(updates.instructions && { instructions: updates.instructions }),
+        ...(updates.voice && { voice: updates.voice }),
+        ...(updates.inputAudioFormat && { input_audio_format: updates.inputAudioFormat }),
+        ...(updates.outputAudioFormat && { output_audio_format: updates.outputAudioFormat }),
+        ...(updates.inputAudioTranscription && { input_audio_transcription: updates.inputAudioTranscription }),
+        ...(updates.turnDetection && { turn_detection: updates.turnDetection }),
+        ...(updates.tools && { tools: updates.tools }),
+        ...(updates.toolChoice && { tool_choice: updates.toolChoice }),
+        ...(updates.temperature !== undefined && { temperature: updates.temperature }),
+        ...(updates.maxResponseOutputTokens && { max_response_output_tokens: updates.maxResponseOutputTokens })
+      }
+    };
+
+    this.webrtcManager.sendData(JSON.stringify(updateMessage));
+    
+    // Update local configuration
+    this.config.session = { ...this.config.session, ...updates };
+    this.sessionManager.updateConfiguration(this.config.session);
+    
+    this.log('Session configuration updated through data channel');
+  }
+
+  /**
+   * Get current service state
+   */
+  getState(): Readonly<RealtimeServiceState> {
+    return { ...this.state };
+  }
+
+  /**
+   * Get current service metrics
+   */
+  getMetrics(): Readonly<ServiceMetrics> {
+    return { ...this.state.metrics };
+  }
+
+  /**
+   * Check if service is connected and ready
+   */
+  isConnected(): boolean {
+    // Service is only connected when WebRTC peer connection is in "connected" state
+    // and data channel is open
+    return this.state.status === 'connected' && 
+           this.webrtcManager.isConnected() &&
+           this.state.webrtc.dataChannelState === 'open';
+  }
+
+  /**
+   * Check if service is in the process of connecting
+   */
+  isConnecting(): boolean {
+    return this.state.status === 'connecting';
+  }
+
+  /**
+   * Check if service is attempting to reconnect
+   */
+  isReconnecting(): boolean {
+    return this.state.status === 'reconnecting';
+  }
+
+  /**
+   * Add event listener
+   * 
+   * @param event - Event name
+   * @param listener - Event handler function
+   */
+  on<K extends keyof RealtimeServiceEvents>(event: K, listener: RealtimeServiceEvents[K]): void {
+    if (!this.eventListeners.has(event)) {
+      this.eventListeners.set(event, new Set());
+    }
+    this.eventListeners.get(event)!.add(listener);
+  }
+
+  /**
+   * Remove event listener
+   * 
+   * @param event - Event name
+   * @param listener - Event handler function to remove
+   */
+  off<K extends keyof RealtimeServiceEvents>(event: K, listener: RealtimeServiceEvents[K]): void {
+    const listeners = this.eventListeners.get(event);
+    if (listeners) {
+      listeners.delete(listener);
+    }
+  }
+
+  /**
+   * Remove all event listeners for a specific event
+   * 
+   * @param event - Event name
+   */
+  removeAllListeners<K extends keyof RealtimeServiceEvents>(event?: K): void {
+    if (event) {
+      this.eventListeners.delete(event);
+    } else {
+      this.eventListeners.clear();
+    }
+  }
+
+  /**
+   * Dispose of the service and clean up resources
+   */
+  dispose(): void {
+    if (this.isDisposed) {
+      return;
+    }
+
+    this.isDisposed = true;
+    this.log('Disposing service...');
+
+    // Stop service if running
+    if (this.state.status !== 'disconnected') {
+      this.stop('Service disposed').catch(error => {
+        console.error('Error stopping service during disposal:', error);
+      });
+    }
+
+    // Clear all timers
+    this.clearReconnectTimer();
+    this.stopMetricsCollection();
+
+    // Dispose managers
+    this.sessionManager.dispose();
+    this.webrtcManager.dispose();
+
+    // Clear event listeners
+    this.eventListeners.clear();
+
+    this.log('Service disposed');
+  }
+
+  // Private methods
+
+  /**
+   * Setup event handlers for SessionManager and WebRTCManager
+   */
+  private setupEventHandlers(): void {
+    // WebRTC data channel events - handle all OpenAI events through data channel
+    this.webrtcManager.on('dataChannelMessage', (data) => {
+      this.handleDataChannelMessage(data);
+    });
+
+    // WebRTC Manager Events
+    this.webrtcManager.on('connected', () => {
+      this.log('WebRTC connected');
+      this.updateWebRTCState();
+    });
+
+    this.webrtcManager.on('disconnected', (reason) => {
+      this.log(`WebRTC disconnected: ${reason || 'Unknown reason'}`);
+      this.updateWebRTCState();
+      this.handleWebRTCDisconnected(reason);
+    });
+
+    this.webrtcManager.on('connectionFailed', (error) => {
+      this.log(`WebRTC connection failed: ${error.message}`);
+      this.handleError(error);
+    });
+
+    this.webrtcManager.on('audioData', (data) => {
+      this.emit('audioInput', data);
+    });
+
+    this.webrtcManager.on('audioTrackReceived', (track) => {
+      // Forward the audio track event so clients can play it
+      this.emit('audioTrackReceived', track);
+    });
+
+    this.webrtcManager.on('connectionStateChanged', (state) => {
+      this.updateWebRTCState();
+    });
+  }
+
+  /**
+   * Handle data channel messages from OpenAI
+   */
+  private handleDataChannelMessage(data: any): void {
+    try {
+      const message = typeof data === 'string' ? JSON.parse(data) : data;
+      
+      switch (message.type) {
+        case 'session.created':
+          this.log('Session created via data channel');
+          this.updateSessionState();
+          break;
+          
+        case 'session.updated':
+          this.log('Session updated via data channel');
+          this.updateSessionState();
+          break;
+          
+        case 'conversation.item.created':
+          if (message.item?.content) {
+            message.item.content.forEach((content: any) => {
+              if (content.type === 'audio' && content.audio) {
+                const audioData = this.base64ToArrayBuffer(content.audio);
+                this.updateMetrics({ 
+                  audioBytesReceived: this.state.metrics.audioBytesReceived + audioData.byteLength,
+                  messagesReceived: this.state.metrics.messagesReceived + 1
+                });
+                this.emit('audioOutput', audioData);
+              } else if (content.type === 'text' && content.text) {
+                this.updateMetrics({ messagesReceived: this.state.metrics.messagesReceived + 1 });
+                this.emit('textReceived', content.text);
+              }
+            });
+          }
+          break;
+          
+        case 'response.audio.delta':
+          if (message.delta) {
+            const audioData = this.base64ToArrayBuffer(message.delta);
+            this.emit('audioOutput', audioData);
+          }
+          break;
+          
+        case 'response.audio.done':
+          // Handle complete audio response
+          if (message.audio) {
+            const audioData = this.base64ToArrayBuffer(message.audio);
+            this.updateMetrics({ 
+              audioBytesReceived: this.state.metrics.audioBytesReceived + audioData.byteLength,
+              messagesReceived: this.state.metrics.messagesReceived + 1
+            });
+            this.emit('audioOutput', audioData);
+          }
+          break;
+          
+        case 'response.text.delta':
+          if (message.delta) {
+            this.emit('textReceived', message.delta);
+          }
+          break;
+          
+        case 'response.function_call':
+          if (message.name && message.arguments) {
+            const callId = message.call_id || `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            this.emit('functionCall', message.name, message.arguments, callId);
+          }
+          break;
+          
+        case 'conversation.updated':
+          if (message.conversation?.items) {
+            this.emit('conversationUpdated', message.conversation.items);
+          }
+          break;
+          
+        case 'error':
+          this.handleError(new Error(message.error?.message || 'Unknown OpenAI error'));
+          break;
+          
+        default:
+          this.log(`Unhandled message type: ${message.type}`);
+      }
+    } catch (error) {
+      this.log(`Error handling data channel message: ${error}`);
+    }
+  }
+
+  /**
+   * Convert base64 string to ArrayBuffer
+   */
+  private base64ToArrayBuffer(base64: string): ArrayBuffer {
+    const binaryString = atob(base64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes.buffer;
+  }
+
+  /**
+   * Handle WebRTC disconnection
+   */
+  private handleWebRTCDisconnected(reason?: string): void {
+    // Update state to disconnected since WebRTC is our only connection
+    this.updateState({ status: 'disconnected' });
+    
+    if (this.config.autoReconnect && this.state.reconnectAttempts < this.config.maxReconnectAttempts!) {
+      this.attemptReconnection(reason || 'WebRTC disconnected');
+    } else {
+      this.emit('disconnected', reason);
+    }
+  }
+
+  /**
+   * Handle service errors
+   */
+  private handleError(error: Error): void {
+    this.updateState({ 
+      status: 'error', 
+      lastError: error 
+    });
+    this.emit('error', error);
+    
+    if (this.config.autoReconnect && this.state.reconnectAttempts < this.config.maxReconnectAttempts!) {
+      this.attemptReconnection(`Error: ${error.message}`);
+    }
+  }
+
+  /**
+   * Attempt to reconnect the service
+   */
+  private async attemptReconnection(reason: string): Promise<void> {
+    if (this.state.reconnectAttempts >= this.config.maxReconnectAttempts!) {
+      this.log(`Max reconnection attempts (${this.config.maxReconnectAttempts}) reached`);
+      this.emit('reconnectionFailed', new Error('Max reconnection attempts reached'));
+      return;
+    }
+
+    this.updateState({ 
+      status: 'reconnecting',
+      reconnectAttempts: this.state.reconnectAttempts + 1
+    });
+
+    this.log(`Attempting reconnection ${this.state.reconnectAttempts}/${this.config.maxReconnectAttempts} (${reason})`);
+    this.emit('reconnecting', this.state.reconnectAttempts, this.config.maxReconnectAttempts!);
+
+    this.reconnectTimer = setTimeout(async () => {
+      try {
+        // Stop current connections
+        await this.stop('Reconnecting');
+        
+        // Wait a bit before reconnecting
+        await this.sleep(this.config.reconnectDelay!);
+        
+        // Start fresh connection
+        await this.start();
+        
+        this.log('Reconnection successful');
+        this.emit('reconnected');
+      } catch (error) {
+        const reconnectError = error instanceof Error ? error : new Error('Reconnection failed');
+        this.log(`Reconnection failed: ${reconnectError.message}`);
+        
+        if (this.state.reconnectAttempts < this.config.maxReconnectAttempts!) {
+          this.attemptReconnection(`Reconnection failed: ${reconnectError.message}`);
+        } else {
+          this.emit('reconnectionFailed', reconnectError);
+        }
+      }
+    }, this.config.reconnectDelay!);
+  }
+
+  /**
+   * Clear reconnection timer
+   */
+  private clearReconnectTimer(): void {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+  }
+
+  /**
+   * Start metrics collection
+   */
+  private startMetricsCollection(): void {
+    this.metricsTimer = setInterval(() => {
+      this.updateMetrics();
+      this.emit('metricsUpdated', this.state.metrics);
+    }, 5000); // Update metrics every 5 seconds
+  }
+
+  /**
+   * Stop metrics collection
+   */
+  private stopMetricsCollection(): void {
+    if (this.metricsTimer) {
+      clearInterval(this.metricsTimer);
+      this.metricsTimer = null;
+    }
+  }
+
+  /**
+   * Update service state
+   */
+  private updateState(updates: Partial<RealtimeServiceState>): void {
+    this.state = { ...this.state, ...updates };
+    this.updateSessionState();
+    this.updateWebRTCState();
+    this.emit('stateChanged', this.state);
+  }
+
+  /**
+   * Update session state from SessionManager
+   */
+  private updateSessionState(): void {
+    // Update SessionManager state based on service status
+    if (this.state.status === 'connected') {
+      this.sessionManager.setConnectionState('connected', `session_${Date.now()}`);
+    } else if (this.state.status === 'disconnected') {
+      this.sessionManager.setConnectionState('disconnected');
+    } else if (this.state.status === 'error') {
+      const errorMessage = this.state.lastError?.message || 'Unknown error';
+      this.sessionManager.setError(errorMessage);
+    } else if (this.state.status === 'reconnecting') {
+      // Map reconnecting to connecting for SessionManager
+      this.sessionManager.setConnectionState('connecting');
+    } else {
+      this.sessionManager.setConnectionState(this.state.status);
+    }
+    
+    // Store configuration in SessionManager
+    if (this.config.session) {
+      this.sessionManager.updateConfiguration(this.config.session);
+    }
+    
+    // Get state from SessionManager
+    this.state.session = this.sessionManager.getState();
+  }
+
+  /**
+   * Update WebRTC state from WebRTCManager
+   */
+  private updateWebRTCState(): void {
+    this.state.webrtc = this.webrtcManager.getConnectionState();
+  }
+
+  /**
+   * Update service metrics
+   */
+  private updateMetrics(updates?: Partial<ServiceMetrics>): void {
+    if (updates) {
+      this.state.metrics = { ...this.state.metrics, ...updates };
+    }
+
+    // Calculate derived metrics
+    if (this.state.startedAt) {
+      this.state.metrics.totalDuration = Date.now() - this.state.startedAt.getTime();
+    }
+
+    // Calculate success rate
+    const totalAttempts = this.state.metrics.messagesSent + this.state.reconnectAttempts;
+    this.state.metrics.successRate = totalAttempts > 0 
+      ? (this.state.metrics.messagesReceived / totalAttempts) * 100 
+      : 100;
+
+    this.state.metrics.reconnectionAttempts = this.state.reconnectAttempts;
+  }
+
+  /**
+   * Create initial metrics object
+   */
+  private createInitialMetrics(): ServiceMetrics {
+    return {
+      totalDuration: 0,
+      messagesSent: 0,
+      messagesReceived: 0,
+      audioBytesSent: 0,
+      audioBytesReceived: 0,
+      averageLatency: 0,
+      reconnectionAttempts: 0,
+      successRate: 100
+    };
+  }
+
+  /**
+   * Emit event to listeners
+   */
+  private emit<K extends keyof RealtimeServiceEvents>(event: K, ...args: Parameters<RealtimeServiceEvents[K]>): void {
+    const listeners = this.eventListeners.get(event);
+    if (listeners) {
+      listeners.forEach(listener => {
+        try {
+          (listener as any)(...args);
+        } catch (error) {
+          console.error(`Error in ${event} event listener:`, error);
+        }
+      });
+    }
+  }
+
+  /**
+   * Log debug messages
+   */
+  private log(message: string): void {
+    if (this.config.debug) {
+      console.log(`[OpenAIRealtimeService] ${message}`);
+    }
+  }
+
+  /**
+   * Sleep utility function
+   */
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Create WebRTC configuration from service config
+   */
+  private createWebRTCConfig(config: RealtimeServiceConfig): WebRTCConfig {
+    const webrtcConfig: WebRTCConfig = {
+      ...config.webrtc
+    };
+
+    // Support both old and new configuration formats
+    if (config.connection?.tokenEndpoint) {
+      webrtcConfig.tokenEndpoint = config.connection.tokenEndpoint;
+    } else if (config.session?.apiKey) {
+      // Map old apiKey config to tokenEndpoint if needed
+      webrtcConfig.tokenEndpoint = `/api/openai-tokens?key=${encodeURIComponent(config.session.apiKey)}`;
+    }
+
+    // Set model from session config if not in webrtc config
+    if (!webrtcConfig.model && config.session?.model) {
+      webrtcConfig.model = config.session.model;
+    }
+
+    return webrtcConfig;
+  }
+
+  /**
+   * Wait for data channel to be ready
+   */
+  private async waitForDataChannel(): Promise<void> {
+    const maxWaitTime = 10000; // 10 seconds
+    const checkInterval = 100; // Check every 100ms
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < maxWaitTime) {
+      const state = this.webrtcManager.getConnectionState();
+      if (state.dataChannelState === 'open') {
+        return;
+      }
+      await this.sleep(checkInterval);
+    }
+
+    throw new Error('Data channel failed to open within timeout');
+  }
+
+  /**
+   * Send session configuration through data channel
+   */
+  private async sendSessionConfig(): Promise<void> {
+    const sessionConfig = {
+      type: 'session.update',
+      session: {
+        modalities: this.config.session.modalities || ['text', 'audio'],
+        instructions: this.config.session.instructions || '',
+        voice: this.config.session.voice || 'alloy',
+        input_audio_format: this.config.session.inputAudioFormat || 'pcm16',
+        output_audio_format: this.config.session.outputAudioFormat || 'pcm16',
+        input_audio_transcription: this.config.session.inputAudioTranscription,
+        turn_detection: this.config.session.turnDetection || {
+          type: 'server_vad',
+          threshold: 0.5,
+          prefix_padding_ms: 300,
+          silence_duration_ms: 500
+        },
+        tools: this.config.session.tools || [],
+        tool_choice: this.config.session.toolChoice || 'auto',
+        temperature: this.config.session.temperature ?? 0.8,
+        max_response_output_tokens: this.config.session.maxResponseOutputTokens || 4096
+      }
+    };
+
+    this.webrtcManager.sendData(JSON.stringify(sessionConfig));
+    this.log('Session configuration sent through data channel');
+  }
+}
+
+export default OpenAIRealtimeService;
