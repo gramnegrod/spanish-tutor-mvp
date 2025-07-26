@@ -2,11 +2,17 @@
   "name": "spanish-tutor-mvp",
   "version": "0.1.0",
   "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "lint:fix": "next lint --fix",
+    "test": "jest",
+    "test:watch": "jest --watch",
     "supabase:init": "npx supabase init",
     "supabase:start": "npx supabase start",
     "supabase:stop": "npx supabase stop",
@@ -20,6 +26,7 @@
     "setup:env": "node scripts/setup-env.js"
   },
   "dependencies": {
+    "@openai-realtime/webrtc": "workspace:*",
     "@radix-ui/react-dropdown-menu": "^2.1.15",
     "@radix-ui/react-label": "^2.1.7",
     "@radix-ui/react-slot": "^1.2.3",
@@ -34,18 +41,28 @@
     "openai": "^5.0.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "tailwind-merge": "^3.3.0"
+    "swr": "^2.3.4",
+    "tailwind-merge": "^3.3.0",
+    "zustand": "^5.0.6"
   },
   "devDependencies": {
+    "@next/bundle-analyzer": "^15.3.5",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/jest": "^30.0.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "autoprefixer": "^10.4.21",
     "eslint": "^8",
     "eslint-config-next": "15.1.5",
+    "jest": "^30.0.4",
+    "jest-environment-jsdom": "^30.0.4",
     "postcss": "^8",
     "supabase": "^2.23.4",
     "tailwindcss": "^3.4.1",
+    "ts-jest": "^29.4.0",
     "typescript": "^5"
   }
 }

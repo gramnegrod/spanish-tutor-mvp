@@ -82,16 +82,30 @@ src/
 │   ├── (auth)/            # Auth pages (login, register)
 │   ├── api/               # API routes
 │   ├── dashboard/         # User dashboard
-│   └── practice/          # Voice conversation interface
+│   └── practice*/         # Various practice pages
 ├── components/            # React components
 │   ├── audio/            # Voice recorder, conversation UI
 │   ├── dashboard/        # Progress cards
+│   ├── practice/         # Reusable practice components
+│   │   ├── ConversationSession.tsx
+│   │   ├── PracticeLayout.tsx
+│   │   ├── SessionModals.tsx
+│   │   ├── SpanishAnalyticsDashboard.tsx
+│   │   └── VoiceControl.tsx
+│   ├── spanish-analysis/ # Spanish learning components
 │   └── ui/               # Reusable UI components
+├── config/               # Configuration files
+│   ├── learning-scenarios.ts
+│   └── openai-presets.ts
 ├── hooks/                # Custom React hooks
+│   ├── useOpenAIRealtime.ts
+│   ├── useConversationEngine.ts
+│   ├── usePracticeSession.ts    # NEW: Unified practice hook
+│   └── useTranscriptManager.ts  # NEW: Transcript management
 ├── lib/                  # Utilities and services
-│   ├── openai-realtime.ts # WebSocket connection
-│   ├── audio-utils.ts    # Audio processing
-│   └── openai-analytics.ts # GPT-4o-mini integration
+│   ├── language-learning-db/  # Database abstraction
+│   ├── spanish-analysis/      # Spanish analysis module
+│   └── pedagogical-system.ts  # Adaptive learning
 └── types/                # TypeScript definitions
 ```
 
@@ -141,6 +155,214 @@ vercel --prod
 - Prisma with parameterized queries
 - Rate limiting on API endpoints
 - Audio data cleaned up after processing
+
+## Creating New Practice Scenarios (Phase 2 Architecture)
+
+### Quick Start: New Scenario in 5 Minutes
+
+With our new modular architecture, creating a new practice scenario is incredibly simple:
+
+```typescript
+// src/app/practice-restaurant/page.tsx
+'use client'
+
+import React from 'react'
+import { usePracticeSession } from '@/hooks/usePracticeSession'
+import { PracticeLayout } from '@/components/practice/PracticeLayout'
+import { SpanishAnalyticsDashboard } from '@/components/practice/SpanishAnalyticsDashboard'
+import { ConversationSession } from '@/components/practice/ConversationSession'
+import { VoiceControl } from '@/components/practice/VoiceControl'
+import { SessionModals } from '@/components/practice/SessionModals'
+import { SessionSummaryWithAnalysis } from '@/components/spanish-analysis/SessionSummaryWithAnalysis'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+
+// Just change these constants!
+const SCENARIO = 'restaurant'  // Must match a scenario in spanish-analysis module
+const NPC_NAME = 'Carlos'
+const NPC_DESCRIPTION = 'professional waiter at an upscale Mexico City restaurant'
+
+export default function PracticeRestaurantPage() {
+  const session = usePracticeSession({
+    scenario: SCENARIO,
+    npcName: NPC_NAME,
+    npcDescription: NPC_DESCRIPTION,
+    enableAuth: true,     // Require login?
+    enableAdaptation: true, // AI adapts to user level?
+    enableAnalysis: true,   // Track Spanish progress?
+    autoConnect: false      // Auto-start voice on load?
+  })
+  
+  return (
+    <PracticeLayout
+      title="Restaurant Practice"
+      npcName={NPC_NAME}
+      subtitle="Order dinner at a fine dining restaurant"
+      scenario={SCENARIO}
+      vocabularyWordsUsed={session.getFullSpanishAnalysis()?.wordsUsed?.map(w => w.word) || []}
+    >
+      <audio ref={session.audioRef} autoPlay hidden />
+      
+      <SpanishAnalyticsDashboard
+        scenario={SCENARIO}
+        analysis={session.getFullSpanishAnalysis()}
+        sessionStats={session.sessionStats}
+        lastFeedback={session.lastComprehensionFeedback}
+      />
+      
+      <div className="grid md:grid-cols-2 gap-6">
+        <ConversationSession {...session} />
+        <VoiceControl {...session} />
+      </div>
+      
+      <SessionModals {...session} />
+      
+      {session.showSummary && (
+        <SessionSummaryWithAnalysis {...session} />
+      )}
+    </PracticeLayout>
+  )
+}
+```
+
+That's it! A fully functional practice page with voice, analytics, and adaptation in ~50 lines.
+
+### Architecture Benefits
+
+1. **77% Less Code**: Refactored pages went from ~660 lines to ~150 lines
+2. **Consistent UX**: All practice pages share the same polished interface
+3. **Feature Parity**: Every scenario gets analytics, adaptation, and progress tracking
+4. **Easy Testing**: Modular components can be tested in isolation
+5. **NPM Ready**: Core modules designed for future extraction
+
+### Available Scenarios
+
+Current scenarios with Spanish analysis support:
+- `taco_vendor` - Street food ordering
+- `restaurant` - Restaurant dining  
+- `hotel_checkin` - Hotel registration
+- `taxi_ride` - Transportation
+- `market` - Shopping at markets
+- `mexico_city_adventure` - Tourist scenarios
+
+### Customization Options
+
+#### 1. Basic Configuration
+```typescript
+usePracticeSession({
+  scenario: 'market',
+  npcName: 'Doña María',
+  npcDescription: 'friendly vendor at Mercado de Medellín',
+  enableAuth: false,        // Guest mode
+  enableAdaptation: true,   // AI adapts difficulty
+  enableAnalysis: true,     // Spanish tracking
+  autoConnect: true,        // Start immediately
+  initialProfile: {         // Override defaults
+    level: 'intermediate',
+    comfortWithSlang: true
+  }
+})
+```
+
+#### 2. Custom AI Instructions
+```typescript
+// Override the AI personality completely
+const generateInstructions = (profile: LearnerProfile) => {
+  return `You are a strict Spanish teacher who corrects every mistake...`
+}
+
+const session = usePracticeSession({
+  // ... other config
+  customInstructions: generateInstructions
+})
+```
+
+#### 3. Layout Variations
+```typescript
+// Minimal layout without vocabulary guide
+<PracticeLayout
+  title="Quick Practice"
+  showVocabularyGuide={false}
+>
+  {/* your content */}
+</PracticeLayout>
+
+// Custom analytics dashboard
+<SpanishAnalyticsDashboard
+  className="bg-blue-50"  // Custom styling
+  hideExpressions={true}  // Hide Mexican expressions
+/>
+```
+
+### Module Architecture
+
+The practice system is built on these core modules:
+
+1. **usePracticeSession Hook**
+   - Manages all state and logic
+   - Handles auth, transcripts, analytics
+   - Integrates with Language Learning DB
+
+2. **PracticeLayout Component**
+   - Consistent page structure
+   - Header (auth/guest)
+   - Vocabulary guide
+   - Responsive design
+
+3. **ConversationSession Component** 
+   - Transcript display
+   - Cost tracking
+   - Action buttons
+   - Session stats
+
+4. **SpanishAnalyticsDashboard Component**
+   - Vocabulary progress
+   - Mexican expressions
+   - Real-time feedback
+   - Session metrics
+
+5. **VoiceControl Component**
+   - Microphone UI
+   - Connection status
+   - Speaking indicators
+   - Adaptation feedback
+
+### Advanced Features
+
+#### Multi-Scenario Adventures
+```typescript
+// Create branching scenarios
+const SCENARIOS = ['taxi_pickup', 'taxi_ride', 'taxi_payment']
+const [currentScenario, setCurrentScenario] = useState(0)
+
+const session = usePracticeSession({
+  scenario: SCENARIOS[currentScenario],
+  onScenarioComplete: () => setCurrentScenario(prev => prev + 1)
+})
+```
+
+#### Custom Analytics
+```typescript
+// Add your own metrics
+const customMetrics = {
+  politenessScore: analyzePoliteness(session.transcripts),
+  culturalAccuracy: checkCulturalNorms(session.transcripts)
+}
+```
+
+#### Voice Presets
+```typescript
+import { SPANISH_VOICE_PRESET, MULTILINGUAL_VOICE_PRESET } from '@/config/openai-presets'
+
+// Use predefined voice configurations
+const session = usePracticeSession({
+  voiceConfig: MULTILINGUAL_VOICE_PRESET, // Auto-detect language
+  // or
+  voiceConfig: {
+    ...SPANISH_VOICE_PRESET,
+    voice: 'nova' // Different voice
+  }
+})
+```
 
 ## Future Enhancements
 

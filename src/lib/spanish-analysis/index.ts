@@ -47,7 +47,8 @@ export {
   getVocabularyByCategory,
   getScenarioVocabulary,
   isMexicanExpression,
-  categorizeFormalityLevel
+  categorizeFormalityLevel,
+  getEssentialVocabularyGuide
 } from './mexican-vocabulary'
 
 // ============================================================================

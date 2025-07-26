@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from 'react'
 import { User } from '@supabase/supabase-js'
-import { createClient } from '@/utils/supabase/client'
+import { getSupabaseClient } from '@/lib/supabase-client'
 import { useRouter } from 'next/navigation'
 
 interface AuthContextType {
@@ -20,7 +20,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
-  const supabase = createClient()
+  const supabase = getSupabaseClient()
 
   useEffect(() => {
     // Get initial session - use getSession() first to check if session exists
@@ -68,7 +68,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const currentPath = window.location.pathname;
         // Only redirect if user is coming from auth pages
         if (currentPath === '/login' || currentPath === '/register' || currentPath === '/') {
-          router.push('/practice')
+          router.push('/practice-v2?dest=mexico-city&npc=taco_vendor')
         }
         // Let users stay on other pages (dashboard, adventures, etc.)
       }

@@ -7,7 +7,7 @@
 ### Project Info
 **Project Name**: Spanish Tutor MVP  
 **Description**: AI-powered conversational Spanish learning app using OpenAI's Realtime API for voice conversations  
-**Current Phase**: Feature Development - Phase 2 Complete (Component Consolidation)
+**Current Phase**: Phase 4 - Modular Learning System (In Progress)
 
 ### Technology Stack
 **Framework**: Next.js 15 with TypeScript  
@@ -1063,23 +1063,72 @@ if (consecutiveSuccesses >= REQUIRED_CONFIRMATIONS) { /* switch to Spanish */ }
 
 ### Current Development Status
 
-**Completed Phases:** 3.6 of 6 (60% complete)
+**Completed Phases:** 4 of 6 (67% complete)
 - ✅ Phase 1: Adaptive Learning Foundation
 - ✅ Phase 2: Hidden Analysis System
 - ✅ Phase 3: Authentication & Persistence
 - ✅ Phase 3.5: Enhanced Progress Feedback
 - ✅ Phase 3.6: Spanish Analysis Module
-- 📅 Phase 4: Scenario Progression System
+- ✅ Phase 4: Modular Learning System (July 2025)
 - 📅 Phase 5: Enhanced Analytics Dashboard
 - 📅 Phase 6: Production Readiness
 
-### Phase 4: Scenario Progression 📅 FUTURE
+### Phase 4: Modular Learning System ✅ COMPLETE (July 2025)
 
-**Planned Features:**
-- Multiple scenarios (taco stand → market → hotel)
-- Difficulty progression based on performance
-- Unlock system for advanced scenarios
-- Cross-scenario vocabulary retention
+**What We Built:**
+1. **Core Module Infrastructure**
+   - Module types and interfaces (`src/lib/modules/core/types.ts`)
+   - Module registry with singleton pattern
+   - Module lifecycle management (initialize, start, pause, resume, end)
+   - Module progress tracker with database integration
+
+2. **Two Launch Modules**
+   - **Free Practice Module**: Wraps existing practice system
+     - Configuration system for features and achievements
+     - Progress tracking integration
+     - NPM-ready modular design
+   
+   - **Guided Journey Module**: Structured learning path
+     - 11 scenarios across Mexico City
+     - Performance-based unlocking (70% comprehension, 5+ vocab)
+     - Progressive difficulty (1-5 levels)
+     - Streak tracking and achievements
+
+3. **Module Selection Dashboard**
+   - Route: `/modules`
+   - Visual module cards with progress bars
+   - Lock/unlock system visualization
+   - Guest mode support indicators
+   - Coming soon preview section
+
+4. **Database Support**
+   - `module_progress` table with JSONB flexibility
+   - RLS policies for secure access
+   - Module service in Language Learning DB
+   - Progress persistence across sessions
+
+5. **Pedagogical Foundation**
+   - Based on Vygotsky's Zone of Proximal Development
+   - Scaffolded learning progression
+   - Spaced repetition concepts
+   - Performance scoring algorithm
+
+**Key Technical Achievements:**
+- Clean module abstraction for future expansion
+- React context provider for module state
+- Type-safe module configuration system
+- Flexible JSONB storage for varied module data
+- Integration with existing practice infrastructure
+
+**Files Created:**
+- RFC: `/docs/rfcs/2025-07-14-module-system.md`
+- Documentation: `/docs/modules/` (4 files)
+- Core infrastructure: `/src/lib/modules/core/` (4 files)
+- Module implementations: `/src/lib/modules/free-practice/`, `/src/lib/modules/guided-journey/`
+- UI components: `/src/components/modules/`, `/src/app/modules/`
+- Database migration: `/scripts/migrations/add-module-system.sql`
+
+**Note**: Database migration needs manual execution in Supabase dashboard
 
 ### Current Testing Status
 

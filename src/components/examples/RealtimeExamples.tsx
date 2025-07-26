@@ -4,7 +4,7 @@
 
 import React, { useState } from 'react';
 import { useOpenAIRealtime } from '@/hooks/useOpenAIRealtime';
-import type { CostTracking } from '@/services/openai-realtime';
+import type { CostTracking } from '@openai-realtime/webrtc';
 
 // Example 1: Basic Spanish Tutor
 export function SpanishTutorExample() {

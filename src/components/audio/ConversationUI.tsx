@@ -5,17 +5,20 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { User, Bot } from 'lucide-react'
 import { cn, safeFormatTime } from '@/lib/utils'
 import { ConversationTranscript } from '@/types'
+import { ConversationEmptyState } from '@/components/shared'
 
 interface ConversationUIProps {
   transcripts: ConversationTranscript[]
   isProcessing?: boolean
   currentSpeaker?: 'user' | 'assistant' | null
+  isConnected?: boolean
 }
 
 export function ConversationUI({ 
   transcripts, 
   isProcessing = false,
-  currentSpeaker 
+  currentSpeaker,
+  isConnected = false
 }: ConversationUIProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -30,7 +33,10 @@ export function ConversationUI({
       ref={scrollRef}
       className="h-[400px] overflow-y-auto rounded-lg border bg-gray-50 p-4 space-y-3"
     >
-      <AnimatePresence initial={false}>
+      {transcripts.length === 0 ? (
+        <ConversationEmptyState isConnected={isConnected} className="h-full" />
+      ) : (
+        <AnimatePresence initial={false}>
         {transcripts.map((transcript) => (
           <motion.div
             key={transcript.id}
@@ -75,6 +81,7 @@ export function ConversationUI({
           </motion.div>
         ))}
       </AnimatePresence>
+      )}
 
       {/* Speaking indicator */}
       {currentSpeaker && (

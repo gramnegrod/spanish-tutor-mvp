@@ -92,8 +92,18 @@ export class WebRTCManager {
       console.warn('[WebRTCManager] No media stream provided');
     }
     
-    // Create data channel
+    // Create data channel with error handling
     this.dc = this.pc.createDataChannel('oai-events');
+    console.log('[WebRTCManager] Data channel created, initial state:', this.dc.readyState);
+    
+    // Add data channel state monitoring
+    this.dc.onerror = (error) => {
+      console.error('[WebRTCManager] Data channel error:', error);
+    };
+    
+    this.dc.onclose = () => {
+      console.log('[WebRTCManager] Data channel closed');
+    };
     
     // Create and send offer (now with audio track)
     console.log('[WebRTCManager] Creating WebRTC offer...');

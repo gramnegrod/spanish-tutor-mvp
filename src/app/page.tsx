@@ -42,32 +42,37 @@ export default function HomePage() {
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               {user ? (
                 <>
-                  <Link href="/practice">
+                  <Link href="/practice-v2/select-npc">
+                    <Button size="lg" className="w-full sm:w-auto bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600">
+                      🗺️ Choose Your Adventure
+                    </Button>
+                  </Link>
+                  <Link href="/practice-v2?dest=mexico-city&npc=taco_vendor">
                     <Button size="lg" className="w-full sm:w-auto">
-                      Taquero Practice
+                      🌮 Classic Taquero
                     </Button>
                   </Link>
                   <Link href="/adaptive-practice">
                     <Button size="lg" className="w-full sm:w-auto bg-purple-600 hover:bg-purple-700">
-                      Adaptive Learning (New!)
+                      🧠 Adaptive Learning
                     </Button>
                   </Link>
                 </>
               ) : (
                 <>
-                  <Link href="/practice-no-auth">
+                  <Link href="/practice-v2/select-npc">
+                    <Button size="lg" className="w-full sm:w-auto bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600">
+                      🗺️ Explore All Characters - Free!
+                    </Button>
+                  </Link>
+                  <Link href="/practice-v2?dest=mexico-city&npc=taco_vendor&guest=true">
                     <Button size="lg" className="w-full sm:w-auto bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600">
-                      Try it Free - No Account Needed
+                      🌮 Quick Taquero Practice
                     </Button>
                   </Link>
                   <Link href="/login">
                     <Button size="lg" variant="outline" className="w-full sm:w-auto">
                       Sign In
-                    </Button>
-                  </Link>
-                  <Link href="/register">
-                    <Button size="lg" variant="outline" className="w-full sm:w-auto">
-                      Create Account
                     </Button>
                   </Link>
                 </>
@@ -221,41 +226,111 @@ export default function HomePage() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-3xl font-bold text-gray-900 mb-4">
-              Meet Your Practice Partners
+              11 Authentic Mexico City Characters
             </h2>
-            <p className="text-xl text-gray-600">
-              Learn from authentic Mexican personas
+            <p className="text-xl text-gray-600 mb-8">
+              Practice with locals in real situations
             </p>
+            <Link href="/practice-v2/select-npc">
+              <Button size="lg" className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600">
+                🗺️ Choose Your Character
+              </Button>
+            </Link>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+          <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
             <motion.div 
-              initial={{ opacity: 0, x: -20 }}
-              whileInView={{ opacity: 1, x: 0 }}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6 }}
-              className="bg-white rounded-lg p-6 shadow-sm"
+              className="bg-white rounded-lg p-6 shadow-sm border border-gray-100"
             >
-              <div className="text-4xl mb-4">🌮</div>
-              <h3 className="text-xl font-semibold mb-2">El Taquero</h3>
-              <p className="text-gray-600 mb-4">
-                Friendly street vendor who uses casual language, diminutives, and expressions like "¿Qué onda?"
+              <div className="text-3xl mb-3">🌮</div>
+              <h3 className="text-lg font-semibold mb-2">Don Roberto - Taco Vendor</h3>
+              <p className="text-gray-600 text-sm mb-3">
+                Learn street Spanish while ordering tacos. Perfect for beginners!
               </p>
-              <p className="text-sm text-green-600 font-medium">Perfect for beginners</p>
+              <p className="text-xs text-orange-600">📍 Roma Norte</p>
             </motion.div>
 
             <motion.div 
-              initial={{ opacity: 0, x: 20 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.6 }}
-              className="bg-white rounded-lg p-6 shadow-sm opacity-75"
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.1 }}
+              className="bg-white rounded-lg p-6 shadow-sm border border-gray-100"
             >
-              <div className="text-4xl mb-4">👔</div>
-              <h3 className="text-xl font-semibold mb-2">El Profesional</h3>
-              <p className="text-gray-600 mb-4">
-                Office worker who speaks formally, uses business vocabulary and professional Mexican Spanish
+              <div className="text-3xl mb-3">🚕</div>
+              <h3 className="text-lg font-semibold mb-2">Juan 'El Capi' - Taxi Driver</h3>
+              <p className="text-gray-600 text-sm mb-3">
+                Navigate the city with chilango slang and mariachi rhythm
               </p>
-              <p className="text-sm text-blue-600 font-medium">Coming soon!</p>
+              <p className="text-xs text-orange-600">📍 Airport</p>
             </motion.div>
+
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+              className="bg-white rounded-lg p-6 shadow-sm border border-gray-100"
+            >
+              <div className="text-3xl mb-3">☕</div>
+              <h3 className="text-lg font-semibold mb-2">Mariana - Barista</h3>
+              <p className="text-gray-600 text-sm mb-3">
+                Order coffee with hipster CDMX vocabulary
+              </p>
+              <p className="text-xs text-orange-600">📍 Condesa</p>
+            </motion.div>
+
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.3 }}
+              className="bg-white rounded-lg p-6 shadow-sm border border-gray-100"
+            >
+              <div className="text-3xl mb-3">🏨</div>
+              <h3 className="text-lg font-semibold mb-2">Sra. Gómez - Hotel Receptionist</h3>
+              <p className="text-gray-600 text-sm mb-3">
+                Check in with clear, professional Spanish
+              </p>
+              <p className="text-xs text-orange-600">📍 Hotel Azteca</p>
+            </motion.div>
+
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.4 }}
+              className="bg-white rounded-lg p-6 shadow-sm border border-gray-100"
+            >
+              <div className="text-3xl mb-3">🥗</div>
+              <h3 className="text-lg font-semibold mb-2">Carlos - Restaurant Waiter</h3>
+              <p className="text-gray-600 text-sm mb-3">
+                Order meals and learn dining etiquette
+              </p>
+              <p className="text-xs text-orange-600">📍 Condesa</p>
+            </motion.div>
+
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.5 }}
+              className="bg-white rounded-lg p-6 shadow-sm border border-gray-100"
+            >
+              <div className="text-3xl mb-3">🛍️</div>
+              <h3 className="text-lg font-semibold mb-2">Doña Carmen - Market Vendor</h3>
+              <p className="text-gray-600 text-sm mb-3">
+                Buy produce with warm, maternal Spanish
+              </p>
+              <p className="text-xs text-orange-600">📍 Mercado Coyoacán</p>
+            </motion.div>
+          </div>
+
+          <div className="text-center mt-8">
+            <p className="text-gray-600 mb-4">Plus 5 more characters including pharmacy, museum guide, Uber driver...</p>
+            <Link href="/practice-v2/select-npc">
+              <Button variant="outline" size="lg">
+                See All 11 Characters →
+              </Button>
+            </Link>
           </div>
         </div>
       </div>

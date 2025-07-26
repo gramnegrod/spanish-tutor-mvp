@@ -39,7 +39,7 @@ export default function MexicoCityAdventurePage() {
     const displayStatus = getScenarioDisplayStatus(scenario, progress);
     if (displayStatus.canStart) {
       // Navigate to practice page with scenario context
-      router.push(`/practice-adventure?scenario=${scenarioId}&adventure=mexico-city`);
+      router.push(`/practice-v2?scenario=${scenarioId}&adventure=mexico-city&mode=adventure`);
     }
   };
 

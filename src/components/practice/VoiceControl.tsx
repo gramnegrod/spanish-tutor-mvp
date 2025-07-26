@@ -7,8 +7,9 @@
  */
 
 import { Button } from '@/components/ui/button'
-import { Mic, Loader2 } from 'lucide-react'
+import { Mic, Loader2, RefreshCw, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { LearnerProfile } from '@/lib/pedagogical-system'
+import { useState, useEffect } from 'react'
 
 interface VoiceControlProps {
   isConnected: boolean;
@@ -24,6 +25,9 @@ interface VoiceControlProps {
     description: string;
   };
   children?: React.ReactNode; // For additional UI like session stats
+  connectionError?: string | null;
+  isUpdatingInstructions?: boolean;
+  onRetry?: () => void;
 }
 
 export function VoiceControl({
@@ -34,25 +38,68 @@ export function VoiceControl({
   onConnect,
   hasManuallyConnected = false,
   adaptationProgress,
-  children
+  children,
+  connectionError,
+  isUpdatingInstructions = false,
+  onRetry
 }: VoiceControlProps) {
+  const [connectionStatus, setConnectionStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle');
+  
+  useEffect(() => {
+    if (connectionError) {
+      setConnectionStatus('error');
+    } else if (isConnected) {
+      setConnectionStatus('connected');
+    } else if (isConnecting || hasManuallyConnected) {
+      setConnectionStatus('connecting');
+    } else {
+      setConnectionStatus('idle');
+    }
+  }, [isConnected, isConnecting, hasManuallyConnected, connectionError]);
   return (
     <div className="flex flex-col items-center space-y-6">
-      {/* Connection Status */}
+      {/* Connection Status with Enhanced Monitoring */}
       <div className="text-center">
-        {isConnected ? (
+        {connectionStatus === 'connected' && !isUpdatingInstructions ? (
           <div className="flex flex-col items-center gap-4">
-            <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center">
+            <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center relative">
               <Mic className="h-10 w-10 text-green-600" />
+              <CheckCircle2 className="h-6 w-6 text-green-600 absolute -bottom-1 -right-1" />
             </div>
             <p className="text-sm text-green-600 font-medium">Connected - Speak anytime</p>
           </div>
-        ) : isConnecting ? (
+        ) : connectionStatus === 'connected' && isUpdatingInstructions ? (
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-20 h-20 rounded-full bg-yellow-100 flex items-center justify-center">
+              <RefreshCw className="h-10 w-10 text-yellow-600 animate-spin" />
+            </div>
+            <p className="text-sm text-yellow-600">Updating instructions...</p>
+          </div>
+        ) : connectionStatus === 'connecting' ? (
           <div className="flex flex-col items-center gap-4">
             <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center">
               <Loader2 className="h-10 w-10 text-gray-400 animate-spin" />
             </div>
             <p className="text-sm text-gray-600">Connecting to tutor...</p>
+          </div>
+        ) : connectionStatus === 'error' ? (
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-20 h-20 rounded-full bg-red-100 flex items-center justify-center">
+              <AlertCircle className="h-10 w-10 text-red-600" />
+            </div>
+            <p className="text-sm text-red-600 font-medium mb-2">Connection failed</p>
+            {connectionError && (
+              <p className="text-xs text-red-500 mb-2">{connectionError}</p>
+            )}
+            <Button 
+              onClick={onRetry || onConnect} 
+              size="sm"
+              variant="outline"
+              className="border-red-300 hover:bg-red-50"
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Retry Connection
+            </Button>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-4">
@@ -70,6 +117,15 @@ export function VoiceControl({
           </div>
         )}
       </div>
+      
+      {/* Connection Debug Info */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="text-xs text-gray-500 bg-gray-50 rounded p-2 w-full">
+          <div>Status: {connectionStatus}</div>
+          <div>WebRTC: {isConnected ? 'Open' : 'Closed'}</div>
+          <div>Instructions: {isUpdatingInstructions ? 'Updating...' : 'Ready'}</div>
+        </div>
+      )}
       
       {/* Speaking Indicators */}
       {currentSpeaker === 'user' && (

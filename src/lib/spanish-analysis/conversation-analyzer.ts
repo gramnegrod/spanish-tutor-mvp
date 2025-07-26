@@ -831,3 +831,276 @@ export class SpanishConversationAnalyzer {
     return explanations[slangWord] || 'Mexican cultural expression'
   }
 }
+
+// ============================================================================
+// Exported Utility Functions
+// ============================================================================
+
+/**
+ * Extract Spanish content from text, separating words, phrases, and Mexican expressions
+ */
+export function extractSpanishContent(text: string): {
+  spanishWords: string[]
+  mexicanExpressions: string[]
+  phrases: string[]
+} {
+  const lowerText = text.toLowerCase()
+  
+  // Common Spanish words (basic detection)
+  const spanishWordPattern = /\b(el|la|los|las|un|una|de|en|que|y|a|por|con|para|es|son|está|están|hola|adiós|gracias|por favor|buenos|días|tardes|noches|sí|no|cómo|qué|dónde|cuándo|quiero|quieres|quiere|tengo|tienes|tiene|soy|eres|somos|muy|bien|mal|grande|pequeño|mucho|poco|más|menos|aquí|allí|ahora|después|hoy|mañana|ayer|semana|mes|año|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|cien|mil|peso|pesos|taco|tacos|tortilla|salsa|agua|cerveza|comida|carne|pollo|pescado|verdura|fruta|mesa|silla|casa|calle|ciudad|país|amigo|amiga|familia|trabajo|escuela|libro|carro|autobús|avión|hotel|restaurante|tienda|mercado|dinero|tarjeta|efectivo|barato|caro|cerca|lejos|rápido|lento|caliente|frío|nuevo|viejo|bueno|malo|feliz|triste|fácil|difícil)\b/gi
+  
+  // Extract all Spanish words
+  const spanishWords: string[] = []
+  const words = text.split(/\s+/)
+  
+  words.forEach(word => {
+    const cleanWord = word.replace(/[¡!¿?.,;:]/g, '').toLowerCase()
+    if (cleanWord && (cleanWord.match(spanishWordPattern) || cleanWord.match(/[áéíóúñ]/))) {
+      spanishWords.push(cleanWord)
+    }
+  })
+  
+  // Extract Mexican expressions
+  const mexicanExpressions: string[] = []
+  const allMexicanExpressions = [
+    ...MEXICAN_EXPRESSIONS.slang,
+    ...MEXICAN_EXPRESSIONS.courtesy,
+    ...MEXICAN_EXPRESSIONS.foodCulture,
+    ...MEXICAN_EXPRESSIONS.timeExpressions,
+    ...MEXICAN_EXPRESSIONS.reactions
+  ]
+  
+  allMexicanExpressions.forEach(expr => {
+    if (lowerText.includes(expr.toLowerCase())) {
+      mexicanExpressions.push(expr.toLowerCase())
+    }
+  })
+  
+  // Extract common phrases
+  const phrases: string[] = []
+  const commonPhrases = [
+    'por favor', 'con todo', 'para llevar', 'para aquí', 'cuánto cuesta',
+    'me da', 'me pone', 'con permiso', 'muchas gracias', 'de nada',
+    'buenos días', 'buenas tardes', 'buenas noches', 'hasta luego',
+    'qué tal', 'cómo está', 'muy bien', 'salsa verde', 'salsa roja'
+  ]
+  
+  commonPhrases.forEach(phrase => {
+    if (lowerText.includes(phrase)) {
+      phrases.push(phrase)
+    }
+  })
+  
+  return {
+    spanishWords: [...new Set(spanishWords)], // Remove duplicates
+    mexicanExpressions: [...new Set(mexicanExpressions)],
+    phrases: [...new Set(phrases)]
+  }
+}
+
+/**
+ * Detect language switching patterns in conversation
+ */
+export function detectLanguageSwitching(conversation: ConversationTurn[]): Array<{
+  turnIndex: number
+  type: 'code_switch' | 'translation' | 'clarification'
+  fromLanguage: 'spanish' | 'english' | 'mixed'
+  toLanguage: 'spanish' | 'english' | 'mixed'
+  context: string
+}> {
+  const switches: Array<{
+    turnIndex: number
+    type: 'code_switch' | 'translation' | 'clarification'
+    fromLanguage: 'spanish' | 'english' | 'mixed'
+    toLanguage: 'spanish' | 'english' | 'mixed'
+    context: string
+  }> = []
+  
+  const englishWords = new Set([
+    'the', 'is', 'are', 'was', 'were', 'have', 'has', 'had', 'do', 'does',
+    'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must', 'can',
+    'want', 'need', 'like', 'love', 'hate', 'know', 'think', 'believe', 'feel',
+    'see', 'hear', 'say', 'tell', 'ask', 'answer', 'give', 'take', 'make', 'get',
+    'go', 'come', 'leave', 'stay', 'work', 'play', 'eat', 'drink', 'sleep', 'wake',
+    'and', 'or', 'but', 'because', 'if', 'when', 'where', 'how', 'why', 'what',
+    'who', 'which', 'that', 'this', 'these', 'those', 'some', 'any', 'all', 'many',
+    'much', 'few', 'little', 'more', 'less', 'most', 'least', 'very', 'too', 'quite',
+    'really', 'just', 'only', 'even', 'still', 'already', 'yet', 'not', 'no', 'yes',
+    'hello', 'hi', 'bye', 'goodbye', 'please', 'thank', 'thanks', 'sorry', 'excuse',
+    'you', 'your', 'yours', 'he', 'she', 'it', 'we', 'they', 'them', 'their',
+    'me', 'my', 'mine', 'him', 'her', 'his', 'hers', 'its', 'us', 'our', 'ours',
+    'everything', 'something', 'anything', 'nothing', 'someone', 'anyone', 'everyone',
+    'meat', 'sauce', 'green', 'red', 'with', 'without', 'for', 'from', 'to', 'in'
+  ])
+  
+  conversation.forEach((turn, index) => {
+    const words = turn.text.toLowerCase().split(/\s+/)
+    let hasSpanish = false
+    let hasEnglish = false
+    
+    words.forEach(word => {
+      const cleanWord = word.replace(/[¡!¿?.,;:]/g, '')
+      if (englishWords.has(cleanWord)) {
+        hasEnglish = true
+      } else if (cleanWord.match(/[áéíóúñ]/) || extractSpanishContent(cleanWord).spanishWords.length > 0) {
+        hasSpanish = true
+      }
+    })
+    
+    // Detect code-switching within a turn
+    if (hasSpanish && hasEnglish) {
+      switches.push({
+        turnIndex: index,
+        type: 'code_switch',
+        fromLanguage: 'spanish',
+        toLanguage: 'english',
+        context: turn.text
+      })
+    }
+    
+    // Detect language changes between turns
+    if (index > 0) {
+      const prevTurn = conversation[index - 1]
+      const prevContent = extractSpanishContent(prevTurn.text)
+      const currContent = extractSpanishContent(turn.text)
+      
+      const prevIsSpanish = prevContent.spanishWords.length > prevTurn.text.split(/\s+/).length * 0.5
+      const currIsSpanish = currContent.spanishWords.length > turn.text.split(/\s+/).length * 0.5
+      
+      if (prevIsSpanish && !currIsSpanish) {
+        switches.push({
+          turnIndex: index,
+          type: 'code_switch',
+          fromLanguage: 'spanish',
+          toLanguage: 'english',
+          context: turn.text
+        })
+      } else if (!prevIsSpanish && currIsSpanish) {
+        switches.push({
+          turnIndex: index,
+          type: 'code_switch',
+          fromLanguage: 'english',
+          toLanguage: 'spanish',
+          context: turn.text
+        })
+      }
+    }
+  })
+  
+  return switches
+}
+
+/**
+ * Enhanced conversation analysis with comprehension scoring
+ */
+export function analyzeConversation(
+  conversation: ConversationTurn[],
+  context: AnalysisContext
+): SpanishConversationAnalysis & {
+  comprehensionScore: number
+  responseAppropriacy: number
+  grammarErrors: Array<{ type: string; context: string }>
+  vocabularyDiversity: number
+} {
+  const analyzer = new SpanishConversationAnalyzer({
+    level: context.learnerLevel,
+    focusScenario: context.scenario,
+    regionalFocus: 'mexican',
+    strictness: 'balanced',
+    trackCulturalMarkers: true,
+    enableGrammarAnalysis: true,
+    enableMasteryTracking: true
+  })
+  
+  const baseAnalysis = analyzer.analyzeConversation(conversation, context)
+  
+  // Calculate comprehension score based on appropriate responses
+  let comprehensionScore = 0
+  let responseCount = 0
+  
+  conversation.forEach((turn, index) => {
+    if (turn.role === 'user' && index > 0) {
+      const prevTurn = conversation[index - 1]
+      if (prevTurn.role === 'assistant') {
+        responseCount++
+        
+        // Check if response is contextually appropriate
+        const isAppropriate = checkResponseAppropriacy(prevTurn.text, turn.text)
+        if (isAppropriate) {
+          comprehensionScore++
+        }
+      }
+    }
+  })
+  
+  const finalComprehensionScore = responseCount > 0 ? comprehensionScore / responseCount : 0
+  
+  // Detect grammar errors
+  const grammarErrors: Array<{ type: string; context: string }> = []
+  
+  conversation.filter(t => t.role === 'user').forEach(turn => {
+    // Check for infinitive usage instead of conjugation
+    if (turn.text.match(/\b(yo|tú|él|ella|nosotros|ellos)\s+(querer|comer|hablar|tener|hacer|poder|deber|saber|conocer|venir|ir|dar|ver|decir|poner)\b/i)) {
+      grammarErrors.push({
+        type: 'infinitive_usage',
+        context: turn.text
+      })
+    }
+    
+    // Check for incorrect verb conjugation patterns
+    if (turn.text.match(/\b(cuánto)\s+(costar|valer)\b/i)) {
+      grammarErrors.push({
+        type: 'verb_agreement',
+        context: turn.text
+      })
+    }
+  })
+  
+  // Calculate vocabulary diversity
+  const uniqueWords = new Set(baseAnalysis.wordsUsed.map(w => w.word))
+  const totalWords = conversation
+    .filter(t => t.role === 'user')
+    .reduce((sum, turn) => sum + turn.text.split(/\s+/).length, 0)
+  
+  const vocabularyDiversity = totalWords > 0 ? uniqueWords.size / totalWords : 0
+  
+  return {
+    ...baseAnalysis,
+    comprehensionScore: finalComprehensionScore,
+    responseAppropriacy: finalComprehensionScore, // Same as comprehension for now
+    grammarErrors,
+    vocabularyDiversity
+  }
+}
+
+/**
+ * Check if a user response is appropriate to the assistant's question/statement
+ */
+function checkResponseAppropriacy(assistantText: string, userResponse: string): boolean {
+  const lowerAssistant = assistantText.toLowerCase()
+  const lowerUser = userResponse.toLowerCase()
+  
+  // Question-answer patterns
+  if (lowerAssistant.includes('cuántos') || lowerAssistant.includes('cuántas')) {
+    // Expects a number in response
+    return /\b(uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|\d+)\b/.test(lowerUser)
+  }
+  
+  if (lowerAssistant.includes('qué') && lowerAssistant.includes('quiere')) {
+    // Expects an order/request
+    return lowerUser.includes('quiero') || lowerUser.includes('me da') || lowerUser.includes('deme')
+  }
+  
+  if (lowerAssistant.includes('con') && (lowerAssistant.includes('salsa') || lowerAssistant.includes('todo'))) {
+    // Expects a yes/no or specification
+    return /\b(sí|no|con|sin|verde|roja|todo)\b/.test(lowerUser)
+  }
+  
+  if (lowerAssistant.includes('cuánto cuesta') || lowerAssistant.includes('cuánto es')) {
+    // Response should acknowledge price or ask about it
+    return /\b(peso|pesos|cuesta|es|está|bien|caro|barato|gracias)\b/.test(lowerUser)
+  }
+  
+  // Default: check for some relevant Spanish content
+  return extractSpanishContent(userResponse).spanishWords.length > 0
+}

@@ -5,7 +5,7 @@ export async function POST(request: NextRequest) {
   try {
     const apiKey = process.env.OPENAI_API_KEY || process.env.NEXT_PUBLIC_OPENAI_API_KEY;
     
-    console.log('Analyze API - Using environment variable key');
+    // Security: Removed unnecessary logging
     
     if (!apiKey) {
       console.error('No OpenAI API key found in environment variables');

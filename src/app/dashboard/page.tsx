@@ -94,7 +94,7 @@ export default function DashboardPage() {
                 <Button 
                   size="lg" 
                   variant="secondary"
-                  onClick={() => router.push('/practice')}
+                  onClick={() => router.push('/practice-v2?dest=mexico-city&npc=taco_vendor')}
                   className="bg-white text-green-600 hover:bg-gray-100 mt-4 w-full"
                 >
                   <Mic className="h-5 w-5 mr-2" />
@@ -116,7 +116,7 @@ export default function DashboardPage() {
                 <Button 
                   size="lg" 
                   variant="secondary"
-                  onClick={() => router.push('/mexico-city-adventure')}
+                  onClick={() => router.push('/practice-v2/select-npc')}
                   className="bg-white text-orange-600 hover:bg-gray-100 mt-4 w-full"
                 >
                   <Mic className="h-5 w-5 mr-2" />

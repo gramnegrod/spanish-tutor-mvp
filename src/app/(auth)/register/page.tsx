@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Loader2 } from 'lucide-react'
 
 export default function RegisterPage() {
-  const router = useRouter()
+  // const router = useRouter() // Not used currently
   const { signUp } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -25,7 +25,7 @@ export default function RegisterPage() {
     const formData = new FormData(event.currentTarget)
     const email = formData.get('email') as string
     const password = formData.get('password') as string
-    const name = formData.get('name') as string
+    // const name = formData.get('name') as string // Not used yet
 
     if (password.length < 6) {
       setError('Password must be at least 6 characters')
@@ -36,8 +36,8 @@ export default function RegisterPage() {
     try {
       await signUp(email, password)
       setSuccess(true)
-    } catch (error: any) {
-      setError(error.message || 'Registration failed')
+    } catch (error) {
+      setError((error as Error).message || 'Registration failed')
     } finally {
       setIsLoading(false)
     }

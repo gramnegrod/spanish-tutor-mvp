@@ -23,6 +23,7 @@ export { ConversationService } from './services/ConversationService'
 export { ProgressService } from './services/ProgressService'
 export { ProfileService } from './services/ProfileService'
 export { AnalyticsService } from './services/AnalyticsService'
+export { ModuleService } from './services/ModuleService'
 
 // ============================================================================
 // Adapter Exports

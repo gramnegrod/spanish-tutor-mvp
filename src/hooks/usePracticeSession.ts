@@ -238,24 +238,36 @@ export function usePracticeSession({
     }
   }, [enableAuth, user, loading, router])
   
+  // Add ref to track previous instructions to prevent duplicate updates
+  const previousInstructionsRef = useRef<string>('')
+
   // Update instructions when custom instructions change
   useEffect(() => {
     if (customInstructions) {
       const newInstructions = generateInstructions(learnerProfile)
-      console.log('🔄 [PracticeSession] Updating instructions due to customInstructions change')
-      console.log('🔄 [PracticeSession] New instructions:', newInstructions.substring(0, 100) + '...')
-      updateInstructions(newInstructions)
       
-      // Force update if already connected
-      if (isConnected) {
-        console.log('🔄 [PracticeSession] Already connected, forcing session update')
-        // Small delay to ensure the update goes through
-        setTimeout(() => {
-          updateInstructions(newInstructions)
-        }, 100)
+      // Only update if instructions have actually changed
+      if (newInstructions !== previousInstructionsRef.current) {
+        console.log('✅ [PracticeSession] Instructions changed, updating...')
+        console.log('🔄 [PracticeSession] Previous instructions:', previousInstructionsRef.current.substring(0, 50) + '...')
+        console.log('🔄 [PracticeSession] New instructions:', newInstructions.substring(0, 100) + '...')
+        
+        previousInstructionsRef.current = newInstructions
+        updateInstructions(newInstructions)
+        
+        // Force update if already connected
+        if (isConnected) {
+          console.log('🔄 [PracticeSession] Already connected, forcing session update')
+          // Small delay to ensure the update goes through
+          setTimeout(() => {
+            updateInstructions(newInstructions)
+          }, 100)
+        }
+      } else {
+        console.log('⏭️ [PracticeSession] Instructions unchanged, skipping update')
       }
     }
-  }, [customInstructions, learnerProfile, generateInstructions, updateInstructions, isConnected])
+  }, [customInstructions, learnerProfile, generateInstructions, isConnected]) // Removed updateInstructions from dependencies
   
   // Log initial instructions
   useEffect(() => {

@@ -12,12 +12,12 @@ const customJestConfig = {
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
   },
-  testPathIgnorePatterns: ['/node_modules/', '/.next/'],
+  coverageProvider: 'v8',
   collectCoverageFrom: [
     'src/**/*.{js,jsx,ts,tsx}',
     '!src/**/*.d.ts',
-    '!src/**/_*.{js,jsx,ts,tsx}',
-    '!src/app/api/**',
+    '!src/**/*test.{js,jsx,ts,tsx}',
+    '!src/**/__tests__/**',
   ],
 }
 

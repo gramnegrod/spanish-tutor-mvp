@@ -1,6 +1,9 @@
 'use client'
 
 import { AuthProvider } from '@/contexts/AuthContext'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { SWRConfig } from 'swr'
+import { swrConfig } from '@/lib/swr-config'
 
 export function Providers({
   children,
@@ -8,8 +11,12 @@ export function Providers({
   children: React.ReactNode
 }) {
   return (
-    <AuthProvider>
-      {children}
-    </AuthProvider>
+    <ErrorBoundary>
+      <SWRConfig value={swrConfig}>
+        <AuthProvider>
+          {children}
+        </AuthProvider>
+      </SWRConfig>
+    </ErrorBoundary>
   )
 }

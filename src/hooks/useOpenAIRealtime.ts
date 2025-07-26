@@ -34,7 +34,7 @@ export interface UseOpenAIRealtimeReturn {
   // Actions
   connect: () => Promise<void>;
   disconnect: () => void;
-  updateInstructions: (instructions: string) => void;
+  updateInstructions: (instructions: string) => Promise<void>;
   extendSession: () => void;
   startFreshSession: () => void;
   dismissWarning: () => void;
@@ -176,7 +176,7 @@ export function useOpenAIRealtime(options: UseOpenAIRealtimeOptions = {}): UseOp
     serviceRef.current.disconnect();
   }, []);
   
-  const updateInstructions = useCallback((instructions: string) => {
+  const updateInstructions = useCallback(async (instructions: string) => {
     console.log('🔄 [useOpenAIRealtime] updateInstructions called');
     console.log('📝 [useOpenAIRealtime] Instructions length:', instructions.length);
     console.log('🔗 [useOpenAIRealtime] Service available:', !!serviceRef.current);
@@ -187,7 +187,7 @@ export function useOpenAIRealtime(options: UseOpenAIRealtimeOptions = {}): UseOp
     }
     
     console.log('✅ [useOpenAIRealtime] Calling service.updateInstructions...');
-    serviceRef.current.updateInstructions(instructions);
+    await serviceRef.current.updateInstructions(instructions);
     console.log('✨ [useOpenAIRealtime] updateInstructions call completed');
   }, []);
   

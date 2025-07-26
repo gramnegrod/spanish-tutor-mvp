@@ -12,6 +12,7 @@ import { AuthHeader } from '@/components/layout/AuthHeader';
 import { UserSettingsForm } from '@/components/practice/UserSettingsForm';
 import { ScenarioPreview } from '@/components/practice/ScenarioPreview';
 import { ConversationResults } from '@/components/practice/ConversationResults';
+import { LoadingState, ErrorDisplay } from '@/components/shared';
 import { 
   LearningScenario, 
   UserAdaptations, 
@@ -373,11 +374,7 @@ export default function AdaptivePracticePage() {
   
   // Render different states
   if (pageState === 'loading') {
-    return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="text-white">Loading your learning profile...</div>
-      </div>
-    );
+    return <LoadingState message="Loading your learning profile..." fullScreen />
   }
   
   if (pageState === 'settings') {
@@ -437,19 +434,12 @@ export default function AdaptivePracticePage() {
             </div>
             
             <div className="mb-4">
-              {transcripts.length === 0 ? (
-                <div className="h-96 overflow-y-auto bg-gray-700 rounded p-4">
-                  <div className="text-gray-400 text-center">
-                    {isConnected ? 'Start speaking to begin the conversation...' : 'Connecting...'}
-                  </div>
-                </div>
-              ) : (
-                <ConversationUI 
-                  transcripts={transcripts}
-                  currentSpeaker={currentSpeaker}
-                  isProcessing={false}
-                />
-              )}
+              <ConversationUI 
+                transcripts={transcripts}
+                currentSpeaker={currentSpeaker}
+                isProcessing={false}
+                isConnected={isConnected}
+              />
             </div>
             
             {/* Hidden audio element for voice playback */}
@@ -506,14 +496,7 @@ export default function AdaptivePracticePage() {
   }
   
   if (pageState === 'analyzing') {
-    return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-white text-xl mb-4">Analyzing your conversation...</div>
-          <div className="text-gray-400">This may take a moment</div>
-        </div>
-      </div>
-    );
+    return <LoadingState message="Analyzing your conversation..." fullScreen />
   }
   
   if (pageState === 'results') {

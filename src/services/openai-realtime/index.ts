@@ -111,14 +111,17 @@ export class OpenAIRealtimeService {
       
       // Setup data channel events
       this.sessionManager.setDataChannel(dc);
-      this.eventHandler.setupDataChannel(dc, () => {
+      this.eventHandler.setupDataChannel(dc, async () => {
         // Data channel opened callback
-        this.sessionManager.configureSession();
+        console.log('[OpenAIRealtimeService] Data channel opened, configuring session...');
+        
+        // Configure session with stored instructions
+        await this.sessionManager.configureSession();
         
         // Now we're truly connected
         this.updateStatus('Connected!');
         console.log('[OpenAIRealtimeService] Successfully connected!');
-        this.sessionManager.startSessionTimers();
+        await this.sessionManager.startSessionTimers();
         this.events.onConnect?.();
         console.log('[OpenAIRealtimeService] onConnect event fired');
       });
@@ -164,7 +167,7 @@ export class OpenAIRealtimeService {
     dc.send(message);
   }
   
-  updateInstructions(instructions: string): void {
+  async updateInstructions(instructions: string): Promise<void> {
     console.log('🔄 [OpenAIRealtimeService] updateInstructions called');
     console.log('📝 [OpenAIRealtimeService] Previous instructions length:', this.config.instructions?.length || 0);
     console.log('📝 [OpenAIRealtimeService] New instructions length:', instructions.length);
@@ -173,7 +176,16 @@ export class OpenAIRealtimeService {
     console.log('🔗 [OpenAI] OLD INSTRUCTIONS:', this.config.instructions?.substring(0, 200) + '...');
     console.log('🆕 [OpenAI] NEW INSTRUCTIONS:', instructions.substring(0, 200) + '...');
     
-    this.sessionManager.updateInstructions(instructions);
+    // Check if we're connected first
+    const dc = this.webrtcManager.getDataChannel();
+    if (!dc || dc.readyState !== 'open') {
+      console.log('⏳ [OpenAIRealtimeService] Data channel not ready, storing instructions for when connected');
+      // Store instructions to be sent when connected
+      this.config.instructions = instructions;
+      return;
+    }
+    
+    await this.sessionManager.updateInstructions(instructions);
   }
   
   // Add reconnection method

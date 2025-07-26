@@ -41,3 +41,30 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+
+# audio samples
+*.mp3
+*.wav
+public/samples/
+
+# debug scripts
+scripts/debug-*
+scripts/test-*
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+
+# London NPCs (separate project)
+london-npcs-chat/node_modules/
+london-npcs-chat/.env*

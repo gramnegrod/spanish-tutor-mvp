@@ -129,12 +129,12 @@ export class EventHandler {
     }
   }
 
-  setupDataChannel(dc: RTCDataChannel, onOpen: () => void): void {
+  setupDataChannel(dc: RTCDataChannel, onOpen: () => void | Promise<void>): void {
     console.log('[EventHandler] Setting up data channel...');
     
-    dc.onopen = () => {
+    dc.onopen = async () => {
       console.log('[EventHandler] Data channel opened!');
-      onOpen();
+      await onOpen();
     };
     
     dc.onmessage = (e) => {

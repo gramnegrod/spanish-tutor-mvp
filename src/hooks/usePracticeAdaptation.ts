@@ -6,7 +6,7 @@
  * on user performance patterns.
  */
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { LearnerProfile } from '@/lib/pedagogical-system'
 
 export interface AdaptationNotification {
@@ -38,6 +38,69 @@ export function usePracticeAdaptation(options: AdaptationOptions) {
   
   // Adaptation notification state
   const [showAdaptationNotification, setShowAdaptationNotification] = useState<AdaptationNotification | null>(null);
+  
+  // Refs to track previous values and prevent duplicate updates
+  const previousProfileRef = useRef<LearnerProfile>(learnerProfile);
+  const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastInstructionsRef = useRef<string>('');
+  const isUpdatingRef = useRef<boolean>(false);
+  
+  // Cleanup effect for timeout
+  useEffect(() => {
+    return () => {
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+      }
+    };
+  }, []);
+  
+  // Update previous profile ref when profile changes from outside
+  useEffect(() => {
+    previousProfileRef.current = learnerProfile;
+  }, [learnerProfile]);
+  
+  // Helper function to check if profile has meaningfully changed
+  const hasProfileMeaningfullyChanged = (oldProfile: LearnerProfile, newProfile: LearnerProfile): boolean => {
+    return oldProfile.needsMoreEnglish !== newProfile.needsMoreEnglish;
+  };
+  
+  // Debounced instruction update function
+  const debouncedInstructionUpdate = useCallback((profile: LearnerProfile) => {
+    if (!onInstructionsUpdate || !generateInstructions) return;
+    
+    // Clear any existing timeout
+    if (updateTimeoutRef.current) {
+      clearTimeout(updateTimeoutRef.current);
+    }
+    
+    // Set new timeout for 500ms debounce
+    updateTimeoutRef.current = setTimeout(() => {
+      if (isUpdatingRef.current) {
+        console.log('[PracticeAdaptation] Skipping instruction update - already updating');
+        return;
+      }
+      
+      const newInstructions = generateInstructions(profile);
+      
+      // Only update if instructions have actually changed
+      if (newInstructions !== lastInstructionsRef.current) {
+        console.log('[PracticeAdaptation] Updating instructions after debounce');
+        lastInstructionsRef.current = newInstructions;
+        isUpdatingRef.current = true;
+        
+        try {
+          onInstructionsUpdate(newInstructions);
+        } finally {
+          // Reset update flag after a short delay
+          setTimeout(() => {
+            isUpdatingRef.current = false;
+          }, 100);
+        }
+      } else {
+        console.log('[PracticeAdaptation] Instructions unchanged, skipping update');
+      }
+    }, 500);
+  }, [onInstructionsUpdate, generateInstructions]);
   
   // Process user performance and potentially trigger adaptations
   const processPerformance = useCallback(async (understood: boolean, confidence: number) => {
@@ -72,13 +135,19 @@ export function usePracticeAdaptation(options: AdaptationOptions) {
           needsMoreEnglish: true
         };
         
+        // Check if profile has meaningfully changed
+        if (!hasProfileMeaningfullyChanged(previousProfileRef.current, newProfile)) {
+          console.log('[PracticeAdaptation] Profile has not meaningfully changed, skipping update');
+          return;
+        }
+        
+        // Update previous profile ref
+        previousProfileRef.current = newProfile;
+        
         onProfileUpdate(newProfile);
         
-        // Update AI instructions if handler provided
-        if (onInstructionsUpdate && generateInstructions) {
-          const newInstructions = generateInstructions(newProfile);
-          onInstructionsUpdate(newInstructions);
-        }
+        // Use debounced instruction update
+        debouncedInstructionUpdate(newProfile);
         
         // Save profile if handler provided
         if (onSaveProfile) {
@@ -135,13 +204,19 @@ export function usePracticeAdaptation(options: AdaptationOptions) {
           needsMoreEnglish: false
         };
         
+        // Check if profile has meaningfully changed
+        if (!hasProfileMeaningfullyChanged(previousProfileRef.current, newProfile)) {
+          console.log('[PracticeAdaptation] Profile has not meaningfully changed, skipping update');
+          return;
+        }
+        
+        // Update previous profile ref
+        previousProfileRef.current = newProfile;
+        
         onProfileUpdate(newProfile);
         
-        // Update AI instructions if handler provided
-        if (onInstructionsUpdate && generateInstructions) {
-          const newInstructions = generateInstructions(newProfile);
-          onInstructionsUpdate(newInstructions);
-        }
+        // Use debounced instruction update
+        debouncedInstructionUpdate(newProfile);
         
         // Save profile if handler provided
         if (onSaveProfile) {
@@ -185,9 +260,9 @@ export function usePracticeAdaptation(options: AdaptationOptions) {
     consecutiveSuccesses, 
     consecutiveFailures, 
     onProfileUpdate, 
-    onInstructionsUpdate, 
-    onSaveProfile, 
-    generateInstructions
+    onSaveProfile,
+    debouncedInstructionUpdate,
+    hasProfileMeaningfullyChanged
   ]);
   
   // Reset adaptation counters

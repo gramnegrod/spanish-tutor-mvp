@@ -26,9 +26,9 @@ export default function LoginPage() {
     try {
       await signIn(email, password)
       // AuthContext will handle redirect on successful sign in
-    } catch (error: any) {
+    } catch (error) {
       console.error('Login error:', error)
-      setError(error.message || 'An error occurred during sign in')
+      setError((error as Error).message || 'An error occurred during sign in')
       setIsLoading(false)
     }
   }
@@ -92,7 +92,7 @@ export default function LoginPage() {
               </Button>
             </Link>
             <p className="text-sm text-center text-gray-600">
-              Don't have an account?{' '}
+              Don&apos;t have an account?{' '}
               <Link href="/register" className="text-blue-600 hover:underline">
                 Register here
               </Link>
