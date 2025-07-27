@@ -97,17 +97,17 @@ export const EVENT_MAPPINGS: Record<keyof V2Events, EventMapping> = {
   
   // Audio events
   audioInput: {
-    v3Event: 'audioData',
+    v3Event: null,
     deprecated: true,
-    message: 'The "audioInput" event has been renamed to "audioData"',
-    suggestion: 'Use the "audioData" event for all audio streaming'
+    message: 'The "audioInput" event has been removed',
+    suggestion: 'Audio input is now handled automatically through WebRTC'
   },
   
   audioOutput: {
-    v3Event: 'audioData',
+    v3Event: null,
     deprecated: true,
-    message: 'The "audioOutput" event has been merged with "audioData"',
-    suggestion: 'Use the "audioData" event and check message context to determine direction'
+    message: 'The "audioOutput" event has been removed',
+    suggestion: 'Audio output is now handled automatically through WebRTC'
   },
   
   audioTrackReceived: {
@@ -300,7 +300,6 @@ function getV3EventParams(eventName: keyof RealtimeEvents): string {
     message: 'message',
     speechStart: '',
     speechEnd: '',
-    audioData: 'data',
     transcription: 'text, isFinal',
     error: 'error',
     debug: 'info'

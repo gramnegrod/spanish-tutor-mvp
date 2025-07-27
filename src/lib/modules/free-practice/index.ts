@@ -3,7 +3,7 @@ export { freePracticeModule } from './FreePracticeModule'
 
 // Configuration exports
 export { 
-  FREE_PRACTICE_CONFIG,
+  MODULE_CONFIG as FREE_PRACTICE_CONFIG,
   FEATURE_FLAGS,
   SCENARIO_MAPPINGS,
   PROGRESS_CONFIG,
