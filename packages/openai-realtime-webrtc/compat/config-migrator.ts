@@ -94,13 +94,10 @@ export function migrateConfig(v2Config: V2Config): MigrationResult {
   const v3Config: V3Config = {
     tokenEndpoint: tokenEndpoint || '',
     debug: v2Config.debug,
-    autoReconnect: v2Config.autoReconnect ?? true,
     voice: mapVoice(v2Config.session.voice, warnings),
     instructions: v2Config.session.instructions,
-    audioFormat: mapAudioFormat(v2Config.session.outputAudioFormat, warnings),
-    enableVAD: v2Config.session.turnDetection?.type === 'server_vad',
-    iceServers: v2Config.webrtc?.iceServers,
-    connectionTimeout: 10000
+    model: v2Config.session.model,
+    iceServers: v2Config.webrtc?.iceServers
   };
 
   // Check for removed features
