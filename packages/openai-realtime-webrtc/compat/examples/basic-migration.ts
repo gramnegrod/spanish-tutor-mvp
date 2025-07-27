@@ -33,7 +33,6 @@ const v2Config = {
   webrtc: {
     iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
   },
-  autoReconnect: true,
   debug: true
 };
 
@@ -74,12 +73,9 @@ const v3Config: RealtimeServiceConfig = {
   // Simple, flat configuration
   voice: 'alloy',
   instructions: 'You are a helpful assistant.',
-  audioFormat: 'pcm16',
-  enableVAD: true,
   
   // Optional settings
   iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
-  autoReconnect: true,
   debug: true
 };
 

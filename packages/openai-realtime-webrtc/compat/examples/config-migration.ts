@@ -18,8 +18,7 @@ const basicV2Config: V2Config = {
     voice: 'alloy',
     instructions: 'You are a helpful assistant.'
   },
-  debug: true,
-  autoReconnect: true
+  debug: true
 };
 
 console.log('=== Basic Configuration Migration ===');
@@ -95,7 +94,6 @@ const complexV2Config: V2Config = {
     enabled: true,
     endpoint: '/api/telemetry'
   },
-  autoReconnect: true,
   maxReconnectAttempts: 5,
   reconnectDelay: 3000,
   debug: true
@@ -156,8 +154,6 @@ const validV3Config: RealtimeServiceConfig = {
   tokenEndpoint: '/api/realtime/token',
   voice: 'alloy',
   instructions: 'You are a helpful assistant.',
-  audioFormat: 'pcm16',
-  enableVAD: true,
   debug: true
 };
 
@@ -169,8 +165,7 @@ if (!validation.valid) {
 
 // Invalid config example
 const invalidV3Config: any = {
-  voice: 'invalid-voice',
-  audioFormat: 'mp3'
+  voice: 'invalid-voice'
 };
 
 const invalidValidation = validateV3Config(invalidV3Config);
