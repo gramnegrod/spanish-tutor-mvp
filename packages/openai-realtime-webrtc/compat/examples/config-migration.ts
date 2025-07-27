@@ -6,7 +6,7 @@
 
 import { migrateConfig, generateMigrationScript, validateV3Config } from '../config-migrator';
 import type { V2Config } from '../config-migrator';
-import type { RealtimeConfig } from '../../src/types';
+import type { RealtimeServiceConfig } from '@openai-realtime/webrtc';
 
 // ============================================
 // Example 1: Basic Configuration
@@ -152,7 +152,7 @@ console.log(migrationScript);
 
 console.log('\n=== V3 Configuration Validation ===');
 
-const validV3Config: RealtimeConfig = {
+const validV3Config: RealtimeServiceConfig = {
   tokenEndpoint: '/api/realtime/token',
   voice: 'alloy',
   instructions: 'You are a helpful assistant.',

@@ -8,13 +8,13 @@
  * Please migrate to the v3 API directly. This adapter will be removed in version 4.0.0.
  */
 
-import { OpenAIRealtimeService as V3Service } from '../src/core/OpenAIRealtimeService';
+import { OpenAIRealtimeService as V3Service } from '@openai-realtime/webrtc';
 import type { 
-  RealtimeConfig as V3Config,
+  RealtimeServiceConfig as V3Config,
   ConnectionState as V3ConnectionState,
   Message,
   RealtimeError
-} from '../src/types';
+} from '@openai-realtime/webrtc';
 
 // V2 Types (for compatibility)
 export interface V2SessionConfig {

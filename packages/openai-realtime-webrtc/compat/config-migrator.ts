@@ -5,7 +5,7 @@
  * Provides detailed warnings and suggestions for deprecated features.
  */
 
-import type { RealtimeConfig as V3Config } from '../src/types';
+import type { RealtimeServiceConfig as V3Config } from '../src/core/OpenAIRealtimeService';
 
 // V2 Configuration Types
 export interface V2Config {

@@ -64,10 +64,10 @@ await service.sendText('Hello!');
 // ============================================
 
 import { OpenAIRealtimeService } from '@openai-realtime/webrtc';
-import type { RealtimeConfig } from '@openai-realtime/webrtc';
+import type { RealtimeServiceConfig } from '@openai-realtime/webrtc';
 
 // Step 1: Update configuration
-const v3Config: RealtimeConfig = {
+const v3Config: RealtimeServiceConfig = {
   // REQUIRED: Token endpoint instead of API key
   tokenEndpoint: '/api/realtime/token',
   
