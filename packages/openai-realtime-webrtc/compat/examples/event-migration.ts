@@ -79,8 +79,8 @@ v2Service.on('metricsUpdated', (metrics) => {
 // V3 Event Patterns (NEW)
 // ============================================
 
-import { OpenAIRealtimeService } from '@openai/realtime-webrtc';
-import type { ConnectionState, Message, RealtimeError } from '@openai/realtime-webrtc';
+import { OpenAIRealtimeService } from '@openai-realtime/webrtc';
+import type { ConnectionState, Message, RealtimeError } from '@openai-realtime/webrtc';
 
 const v3Service = new OpenAIRealtimeService({
   tokenEndpoint: '/api/realtime/token'

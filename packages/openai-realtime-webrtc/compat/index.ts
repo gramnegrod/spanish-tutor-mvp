@@ -41,7 +41,7 @@ export {
 // Show deprecation notice on import
 if (typeof console !== 'undefined' && console.warn) {
   console.warn(
-    '⚠️ [@openai/realtime-webrtc] You are using the v2 compatibility layer.\n' +
+    '⚠️ [@openai-realtime/webrtc] You are using the v2 compatibility layer.\n' +
     'This layer is deprecated and will be removed in v4.0.0 (July 2025).\n' +
     'Please migrate to the v3 API. See migration guide at:\n' +
     'https://github.com/openai/realtime-webrtc/blob/main/docs/MIGRATION.md'
@@ -53,7 +53,7 @@ if (typeof console !== 'undefined' && console.warn) {
  * 
  * @example
  * ```typescript
- * import { quickMigrate } from '@openai/realtime-webrtc/compat';
+ * import { quickMigrate } from '@openai-realtime/webrtc/compat';
  * 
  * const v3Config = quickMigrate(myV2Config);
  * ```

@@ -368,7 +368,7 @@ export function generateMigrationScript(v2Config: V2Config): string {
   let script = `// OpenAI Realtime WebRTC - V2 to V3 Migration Script\n`;
   script += `// Generated on: ${new Date().toISOString()}\n\n`;
   
-  script += `import { OpenAIRealtimeService } from '@openai/realtime-webrtc';\n\n`;
+  script += `import { OpenAIRealtimeService } from '@openai-realtime/webrtc';\n\n`;
   
   // Add warnings as comments
   if (result.warnings.length > 0) {

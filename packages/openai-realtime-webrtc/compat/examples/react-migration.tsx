@@ -11,7 +11,7 @@ import React, { useEffect, useState } from 'react';
 // ============================================
 
 /*
-import { useOpenAIRealtime } from '@openai/realtime-webrtc/react';
+import { useOpenAIRealtime } from '@openai-realtime/webrtc/react';
 
 function V2VoiceAssistant() {
   const {

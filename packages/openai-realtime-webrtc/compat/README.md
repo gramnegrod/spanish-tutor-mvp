@@ -7,7 +7,7 @@ Simple helper for v2 → v3 migration.
 ## Usage
 
 ```typescript
-import { OpenAIRealtimeService } from '@openai/realtime-webrtc/compat';
+import { OpenAIRealtimeService } from '@openai-realtime/webrtc/compat';
 
 // Your old v2 code might work
 const service = new OpenAIRealtimeService({

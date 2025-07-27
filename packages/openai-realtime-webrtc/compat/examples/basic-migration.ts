@@ -63,8 +63,8 @@ await service.sendText('Hello!');
 // V3 Code (NEW) - Direct Migration
 // ============================================
 
-import { OpenAIRealtimeService } from '@openai/realtime-webrtc';
-import type { RealtimeConfig } from '@openai/realtime-webrtc';
+import { OpenAIRealtimeService } from '@openai-realtime/webrtc';
+import type { RealtimeConfig } from '@openai-realtime/webrtc';
 
 // Step 1: Update configuration
 const v3Config: RealtimeConfig = {
