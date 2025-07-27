@@ -184,31 +184,6 @@ function mapVoice(v2Voice: string | undefined, warnings: MigrationWarning[]): V3
 }
 
 /**
- * Map v2 audio format to v3
- */
-function mapAudioFormat(v2Format: string | undefined, warnings: MigrationWarning[]): V3Config['audioFormat'] {
-  const validFormats = ['pcm16', 'g711_ulaw', 'g711_alaw'];
-  
-  if (!v2Format) {
-    return 'pcm16';
-  }
-
-  if (validFormats.includes(v2Format)) {
-    return v2Format as V3Config['audioFormat'];
-  }
-
-  warnings.push({
-    field: 'session.outputAudioFormat',
-    oldValue: v2Format,
-    message: `Invalid audio format "${v2Format}"`,
-    suggestion: `Use one of: ${validFormats.join(', ')}`,
-    severity: 'warning'
-  });
-
-  return 'pcm16';
-}
-
-/**
  * Check for removed features and provide migration guidance
  */
 function checkRemovedFeatures(config: V2Config, warnings: MigrationWarning[]): void {
@@ -436,10 +411,6 @@ export function validateV3Config(config: V3Config): { valid: boolean; errors: st
   
   if (config.voice && !['alloy', 'echo', 'shimmer', 'nova', 'fable', 'onyx'].includes(config.voice)) {
     errors.push(`Invalid voice: ${config.voice}`);
-  }
-  
-  if (config.audioFormat && !['pcm16', 'g711_ulaw', 'g711_alaw'].includes(config.audioFormat)) {
-    errors.push(`Invalid audio format: ${config.audioFormat}`);
   }
   
   return {
