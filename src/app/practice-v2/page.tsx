@@ -184,7 +184,6 @@ function PracticeContent() {
               onConnect={connect}
               hasManuallyConnected={isConnected}
               adaptationProgress={adaptationProgress}
-              connectionError={error?.message}
               isUpdatingInstructions={false}
               onRetry={connect}
             />

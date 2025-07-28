@@ -11,5 +11,4 @@ export {
   UI_CONFIG
 } from './config'
 
-// Type exports
-export type { ScenarioMapping, ProgressConfig, Achievement } from './config'
+// No type exports from config - all are const values

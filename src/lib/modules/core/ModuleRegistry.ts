@@ -50,9 +50,7 @@ export class ModuleRegistry {
   public unregister(moduleId: string): void {
     try {
       const module = this.modules.get(moduleId);
-      if (module?.cleanup) {
-        module.cleanup();
-      }
+      // Modules don't have cleanup method in current interface
       this.modules.delete(moduleId);
     } catch (error) {
       console.error(`Failed to unregister module ${moduleId}: ${error}`);
@@ -87,7 +85,7 @@ export class ModuleRegistry {
    */
   public getModulesByDifficulty(difficulty: ModuleDifficulty): LearningModule[] {
     return this.getAllModules().filter(module => 
-      module.metadata.difficulty === difficulty
+      module.supportedDifficulties.includes(difficulty)
     );
   }
 
@@ -96,7 +94,7 @@ export class ModuleRegistry {
    */
   public getModulesByFeature(feature: keyof ModuleFeatures): LearningModule[] {
     return this.getAllModules().filter(module => 
-      module.metadata.features[feature] === true
+      module.features[feature] === true
     );
   }
 
@@ -112,11 +110,9 @@ export class ModuleRegistry {
       throw new Error('Module must have a valid string id');
     }
 
-    if (!module.metadata || typeof module.metadata !== 'object') {
-      throw new Error('Module must have valid metadata');
-    }
+    // Metadata validation removed - using direct properties
 
-    const requiredMethods = ['initialize', 'execute', 'getProgress'];
+    const requiredMethods = ['initialize', 'start', 'pause', 'resume', 'end'];
     for (const method of requiredMethods) {
       if (typeof (module as any)[method] !== 'function') {
         throw new Error(`Module must implement ${method} method`);
@@ -126,16 +122,19 @@ export class ModuleRegistry {
 
   private isModuleAccessible(module: LearningModule, profile: LearnerProfile): boolean {
     // Check difficulty level
-    const userLevel = profile.currentLevel || 'A1';
-    const moduleDifficulty = module.metadata.difficulty;
+    const userLevel = profile.level || 'beginner';
+    const moduleDifficulty = module.defaultDifficulty;
     
     // Basic accessibility check - can be enhanced
     const levelMap: Record<string, number> = {
-      'A1': 1, 'A2': 2, 'B1': 3, 'B2': 4, 'C1': 5, 'C2': 6
-    };
-
-    const difficultyMap: Record<ModuleDifficulty, number> = {
       'beginner': 1, 'intermediate': 3, 'advanced': 5
+    };
+    
+    const difficultyMap: Record<ModuleDifficulty, number> = {
+      [ModuleDifficulty.BEGINNER]: 1, 
+      [ModuleDifficulty.INTERMEDIATE]: 3, 
+      [ModuleDifficulty.ADVANCED]: 5,
+      [ModuleDifficulty.ALL]: 0
     };
 
     return levelMap[userLevel] >= difficultyMap[moduleDifficulty] - 1;

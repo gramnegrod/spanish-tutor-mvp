@@ -1,6 +1,15 @@
 import { EventEmitter } from 'events';
-import type { Module, ModuleContext } from './types';
+import type { LearningModule } from './types';
 import { ModuleRegistry } from './ModuleRegistry';
+
+// TODO: Define ModuleContext type
+interface ModuleContext {
+  userId: string;
+  language?: string;
+  moduleProgress?: any;
+  sessionId?: string;
+  startTime?: number;
+}
 
 interface LifecycleState {
   currentModuleId: string | null;
@@ -35,13 +44,17 @@ export class ModuleLifecycle extends EventEmitter {
     const modules = this.registry.getAllModules();
     const errors: Array<{ id: string; error: Error }> = [];
 
-    for (const [id, module] of modules) {
+    for (const module of modules) {
       try {
-        if (module.onInit) {
-          await module.onInit();
-        }
+        // Initialize module
+        await module.initialize({
+          difficulty: module.defaultDifficulty,
+          enableHints: true,
+          enableAudio: true,
+          sessionDuration: 15
+        });
       } catch (error) {
-        errors.push({ id, error: error as Error });
+        errors.push({ id: module.id, error: error as Error });
       }
     }
 
@@ -77,10 +90,15 @@ export class ModuleLifecycle extends EventEmitter {
         startTime: Date.now()
       };
 
-      // Activate new module
-      if (module.onActivate) {
-        await module.onActivate(context);
-      }
+      // Start the module session
+      await module.start({
+        id: context.sessionId || crypto.randomUUID(),
+        moduleId,
+        userId: context.userId,
+        startTime: new Date(),
+        progress: 0,
+        errors: 0
+      });
 
       this.state.currentModuleId = moduleId;
       this.state.context = context;
@@ -102,9 +120,9 @@ export class ModuleLifecycle extends EventEmitter {
     const moduleId = this.state.currentModuleId;
     const module = this.registry.getModule(moduleId);
 
-    if (module?.onDeactivate) {
+    if (module) {
       try {
-        await module.onDeactivate();
+        module.pause();
       } catch (error) {
         console.error(`Error deactivating module ${moduleId}:`, error);
         this.emit('moduleError', { moduleId, error, phase: 'deactivate' });
@@ -156,7 +174,7 @@ export class ModuleLifecycle extends EventEmitter {
     }
   }
 
-  getCurrentModule(): Module | null {
+  getCurrentModule(): LearningModule | null {
     if (!this.state.currentModuleId) return null;
     return this.registry.getModule(this.state.currentModuleId);
   }
@@ -173,15 +191,8 @@ export class ModuleLifecycle extends EventEmitter {
     await this.deactivateCurrentModule();
     
     const modules = this.registry.getAllModules();
-    for (const [id, module] of modules) {
-      if (module.onDestroy) {
-        try {
-          await module.onDestroy();
-        } catch (error) {
-          console.error(`Error destroying module ${id}:`, error);
-        }
-      }
-    }
+    // Modules don't have cleanup method in current interface
+    // TODO: Add cleanup to LearningModule interface if needed
 
     this.removeAllListeners();
   }

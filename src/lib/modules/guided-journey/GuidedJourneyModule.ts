@@ -3,7 +3,9 @@ import {
   ModuleConfiguration, 
   ModuleDifficulty, 
   ModuleFeatures,
-  ModuleStatus 
+  ModuleStatus,
+  ModuleAnalytics,
+  ModuleSession
 } from '../core/types'
 import { journeyScenarios, getUnlockedScenarios, JourneyProgress } from './journey-config'
 import { ProgressionService } from './services/ProgressionService'
@@ -13,8 +15,8 @@ export class GuidedJourneyModule implements LearningModule {
   public readonly name = 'Guided Journey'
   public readonly description = 'Follow a structured path through Mexico City, unlocking scenarios as you progress'
   public readonly icon = '🗺️'
-  public readonly difficulty = ModuleDifficulty.ALL
-  public readonly estimatedTime = 20 // minutes per session
+  public readonly supportedDifficulties = [ModuleDifficulty.BEGINNER, ModuleDifficulty.INTERMEDIATE, ModuleDifficulty.ADVANCED]
+  public readonly defaultDifficulty = ModuleDifficulty.BEGINNER
   
   public readonly features: ModuleFeatures = {
     progressive: true,    // Scenarios unlock in sequence
@@ -25,6 +27,7 @@ export class GuidedJourneyModule implements LearningModule {
 
   private progressionService: ProgressionService
   private status: ModuleStatus = ModuleStatus.INACTIVE
+  private currentSession: ModuleSession | null = null
   private configuration: ModuleConfiguration = {
     difficulty: ModuleDifficulty.BEGINNER,
     sessionDuration: 20,
@@ -55,20 +58,20 @@ export class GuidedJourneyModule implements LearningModule {
     }
   }
 
-  async start(context: any): Promise<void> {
+  async start(session: ModuleSession): Promise<void> {
     if (this.status !== ModuleStatus.READY) {
       throw new Error('Module must be initialized before starting')
     }
     
     this.status = ModuleStatus.ACTIVE
+    this.currentSession = session
     
     // Load user progress
-    const userId = context.userId || 'guest'
+    const userId = session.userId || 'guest'
     const progress = await this.progressionService.loadUserProgress(userId)
     
-    // Store in context for access by components
-    context.journeyProgress = progress
-    context.availableScenarios = await this.progressionService.getAvailableScenarios(userId)
+    // Store progress for access by components
+    // TODO: Need a way to pass this data to components
   }
 
   pause(): void {
@@ -82,10 +85,21 @@ export class GuidedJourneyModule implements LearningModule {
     }
   }
 
-  async end(): Promise<void> {
+  async end(): Promise<ModuleAnalytics> {
     // Save final progress
     this.status = ModuleStatus.READY
     console.log('Ending Guided Journey module')
+    
+    // Return analytics
+    return {
+      totalSessions: 1,
+      avgSessionDuration: this.currentSession ? (Date.now() - this.currentSession.startTime.getTime()) / 1000 / 60 : 0, // in minutes
+      completionRate: this.currentSession?.progress || 0,
+      errorRate: 0,
+      featureUsage: {
+        'scenarios_completed': 1
+      }
+    }
   }
 
   cleanup(): void {

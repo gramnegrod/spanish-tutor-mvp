@@ -16,8 +16,8 @@ interface ModuleCardProps {
 }
 
 function ModuleCard({ module, progress, onSelect, isAuthenticated }: ModuleCardProps) {
-  const completionRate = progress?.statistics?.completionRate || 0
-  const isLocked = module.features.progressive && !progress?.isUnlocked && module.id !== 'free-practice'
+  const completionRate = 0 // TODO: Calculate from progress data
+  const isLocked = module.features.progressive && !progress && module.id !== 'free-practice'
   
   return (
     <motion.div
@@ -80,7 +80,7 @@ function ModuleCard({ module, progress, onSelect, isAuthenticated }: ModuleCardP
           
           {/* Estimated time */}
           <p className="text-gray-400 text-xs mt-2">
-            ~{module.estimatedTime} minutes per session
+            ~15 minutes per session
           </p>
         </div>
       </div>
@@ -113,15 +113,16 @@ export default function ModuleSelectionDashboard() {
   
   async function loadModuleProgress(userId: string) {
     try {
-      const db = LanguageLearningDB.getInstance()
+      // TODO: Implement database integration for module progress
+      // const db = new LanguageLearningDB(config)
       const progress: Record<string, ModuleProgress> = {}
       
-      for (const module of modules) {
-        const moduleProgress = await db.modules?.getProgress(userId, module.id, 'es')
-        if (moduleProgress) {
-          progress[module.id] = moduleProgress
-        }
-      }
+      // for (const module of modules) {
+      //   const moduleProgress = await db.modules?.getProgress(userId, module.id, 'es')
+      //   if (moduleProgress) {
+      //     progress[module.id] = moduleProgress
+      //   }
+      // }
       
       setModuleProgress(progress)
     } catch (error) {

@@ -40,8 +40,8 @@ export default function SimplePracticePage() {
         turnDetection: {
           type: 'server_vad',
           threshold: 0.7,
-          prefixPaddingMs: 500,
-          silenceDurationMs: 800
+          prefix_padding_ms: 500,
+          silence_duration_ms: 800
         }
       }, {
         onConnect: () => {
@@ -54,13 +54,13 @@ export default function SimplePracticePage() {
           setIsConnected(false)
           setStatus('Disconnected')
         },
-        onError: (err) => {
+        onError: (err: Error) => {
           console.error('[SimplePractice] Error:', err)
           setError(err.message)
           setIsConnecting(false)
           setStatus('Error: ' + err.message)
         },
-        onTranscript: (role, text) => {
+        onTranscript: (role: 'user' | 'assistant', text: string) => {
           console.log(`[SimplePractice] ${role}: ${text}`)
           setTranscripts(prev => [...prev, { role, text }])
         },

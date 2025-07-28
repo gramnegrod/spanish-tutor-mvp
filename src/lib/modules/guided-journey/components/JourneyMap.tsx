@@ -1,8 +1,9 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Lock, CheckCircle, MapPin, Star } from 'lucide-react';
-import type { JourneyProgress, Scenario } from '../types/journey-config';
+import type { JourneyProgress } from '../journey-config';
 import { learningScenarios } from '@/config/learning-scenarios';
+import type { LearningScenario } from '@/types/adaptive-learning';
 
 interface JourneyMapProps {
   currentProgress: JourneyProgress;
@@ -15,15 +16,15 @@ export const JourneyMap: React.FC<JourneyMapProps> = ({
   onScenarioSelect,
   isLoading = false,
 }) => {
-  const getScenarioStatus = (scenario: Scenario) => {
-    const progress = currentProgress.scenarios[scenario.id];
-    if (!progress) return 'locked';
-    if (progress.completed) return 'completed';
-    if (progress.unlocked) return 'unlocked';
+  const getScenarioStatus = (scenario: LearningScenario) => {
+    // For now, just check if it's the current scenario
+    if (currentProgress.scenarioId === scenario.id) {
+      return currentProgress.completed ? 'completed' : 'unlocked';
+    }
     return 'locked';
   };
 
-  const completedCount = Object.values(currentProgress.scenarios).filter(s => s.completed).length;
+  const completedCount = currentProgress.completed ? 1 : 0; // Simplified for now
   const progressPercentage = Math.round((completedCount / learningScenarios.length) * 100);
 
   return (
@@ -67,7 +68,7 @@ export const JourneyMap: React.FC<JourneyMapProps> = ({
           {learningScenarios.map((scenario, index) => {
             const status = getScenarioStatus(scenario);
             const isAccessible = status !== 'locked';
-            const isCurrent = currentProgress.currentScenarioId === scenario.id;
+            const isCurrent = currentProgress.scenarioId === scenario.id;
 
             return (
               <motion.button
@@ -143,7 +144,7 @@ export const JourneyMap: React.FC<JourneyMapProps> = ({
                   </span>
                   {status === 'completed' && (
                     <span className="text-xs text-green-600 font-medium">
-                      {currentProgress.scenarios[scenario.id]?.score || 0} puntos
+                      {currentProgress.scenarioId === scenario.id ? currentProgress.bestScore : 0} puntos
                     </span>
                   )}
                 </div>

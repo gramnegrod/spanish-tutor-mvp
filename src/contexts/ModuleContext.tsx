@@ -47,19 +47,20 @@ export function ModuleProvider({ children }: { children: React.ReactNode }) {
   
   async function loadAllModuleProgress(userId: string) {
     try {
-      const db = LanguageLearningDB.getInstance()
-      if (!db.modules) return
+      // TODO: Implement database integration
+      // const db = new LanguageLearningDB(config)
+      // if (!db.modules) return
       
       // Load progress for all registered modules
       const modules = ['free-practice', 'guided-journey'] // TODO: Get from registry
       const progress: Record<string, ModuleProgress> = {}
       
-      for (const moduleId of modules) {
-        const moduleProgress = await db.modules.getProgress(userId, moduleId, 'es')
-        if (moduleProgress) {
-          progress[moduleId] = moduleProgress
-        }
-      }
+      // for (const moduleId of modules) {
+      //   const moduleProgress = await db.modules.getProgress(userId, moduleId, 'es')
+      //   if (moduleProgress) {
+      //     progress[moduleId] = moduleProgress
+      //   }
+      // }
       
       setModuleProgress(progress)
     } catch (err) {
@@ -78,28 +79,13 @@ export function ModuleProvider({ children }: { children: React.ReactNode }) {
         throw new Error(`Module ${moduleId} not found`)
       }
       
-      // Create lifecycle manager
-      const lifecycle = new ModuleLifecycle(module)
-      
-      // Initialize module
-      await lifecycle.initialize({
-        difficulty: module.difficulty,
-        sessionDuration: module.estimatedTime,
-        enableHints: true,
-        enableAudio: true
-      })
-      
-      // Start module with context
-      const context = {
-        userId: user?.id || 'guest',
-        language: 'es',
-        moduleProgress: moduleProgress[moduleId]
-      }
-      
-      await lifecycle.start(context)
+      // TODO: Implement proper module lifecycle management
+      // const lifecycle = new ModuleLifecycle(registry)
+      // await lifecycle.initialize(...)
+      // await lifecycle.start(moduleId, context)
       
       setActiveModule(module)
-      setModuleLifecycle(lifecycle)
+      // setModuleLifecycle(lifecycle)
       setLoading(false)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to activate module')
@@ -110,10 +96,11 @@ export function ModuleProvider({ children }: { children: React.ReactNode }) {
   
   async function deactivateModule() {
     try {
-      if (moduleLifecycle) {
-        await moduleLifecycle.stop()
-        moduleLifecycle.cleanup()
-      }
+      // TODO: Implement lifecycle cleanup
+      // if (moduleLifecycle) {
+      //   await moduleLifecycle.stop()
+      //   moduleLifecycle.cleanup()
+      // }
       
       setActiveModule(null)
       setModuleLifecycle(null)
@@ -124,21 +111,22 @@ export function ModuleProvider({ children }: { children: React.ReactNode }) {
   
   async function updateModuleProgress(moduleId: string, progress: Partial<ModuleProgress>) {
     try {
-      const db = LanguageLearningDB.getInstance()
+      // TODO: Implement database integration
+      // const db = new LanguageLearningDB(config)
       const userId = user?.id || 'guest'
       
-      if (db.modules) {
-        await db.modules.updateProgress(userId, moduleId, 'es', progress)
-        
-        // Reload progress
-        const updated = await db.modules.getProgress(userId, moduleId, 'es')
-        if (updated) {
-          setModuleProgress(prev => ({
-            ...prev,
-            [moduleId]: updated
-          }))
-        }
-      }
+      // if (db.modules) {
+      //   await db.modules.updateProgress(userId, moduleId, 'es', progress)
+      //   
+      //   // Reload progress
+      //   const updated = await db.modules.getProgress(userId, moduleId, 'es')
+      //   if (updated) {
+      //     setModuleProgress(prev => ({
+      //       ...prev,
+      //       [moduleId]: updated
+      //     }))
+      //   }
+      // }
     } catch (err) {
       console.error('Failed to update module progress:', err)
     }

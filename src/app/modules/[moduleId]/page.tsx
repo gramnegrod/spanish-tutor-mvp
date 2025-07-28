@@ -66,10 +66,8 @@ export default function ModulePage() {
     return (
       <div className="min-h-screen bg-gray-900">
         <JourneyMap
-          progress={journeyProgress}
+          currentProgress={journeyProgress}
           onScenarioSelect={handleScenarioSelect}
-          onBack={handleBack}
-          isAuthenticated={!!user}
         />
       </div>
     )
