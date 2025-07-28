@@ -34,8 +34,11 @@ export interface RealtimeConfig {
   /** Instructions for the AI assistant */
   instructions?: string;
   
-  /** Audio format (default: 'pcm16') */
-  audioFormat?: AudioFormat;
+  /** Input audio format (default: 'pcm16') */
+  inputAudioFormat?: AudioFormat;
+  
+  /** Output audio format (default: 'pcm16') */
+  outputAudioFormat?: AudioFormat;
   
   /** Enable voice activity detection (default: true) */
   enableVAD?: boolean;
@@ -204,7 +207,8 @@ export const DEFAULT_CONFIG: Partial<RealtimeConfig> = {
   debug: false,
   autoReconnect: true,
   voice: 'alloy',
-  audioFormat: 'pcm16',
+  inputAudioFormat: 'pcm16',
+  outputAudioFormat: 'pcm16',
   enableVAD: true,
   connectionTimeout: 10000,
 };

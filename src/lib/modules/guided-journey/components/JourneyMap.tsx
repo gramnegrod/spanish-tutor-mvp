@@ -17,14 +17,22 @@ export const JourneyMap: React.FC<JourneyMapProps> = ({
   isLoading = false,
 }) => {
   const getScenarioStatus = (scenario: LearningScenario) => {
-    // For now, just check if it's the current scenario
-    if (currentProgress.scenarioId === scenario.id) {
-      return currentProgress.completed ? 'completed' : 'unlocked';
+    // Check if scenario is completed
+    if (currentProgress.completedScenarios[scenario.id]) {
+      return 'completed';
+    }
+    // Check if scenario is unlocked
+    if (currentProgress.unlockedScenarios.includes(scenario.id)) {
+      return 'unlocked';
+    }
+    // Check if it's the current scenario
+    if (currentProgress.currentScenarioId === scenario.id) {
+      return 'unlocked';
     }
     return 'locked';
   };
 
-  const completedCount = currentProgress.completed ? 1 : 0; // Simplified for now
+  const completedCount = Object.keys(currentProgress.completedScenarios).length;
   const progressPercentage = Math.round((completedCount / learningScenarios.length) * 100);
 
   return (
@@ -68,7 +76,7 @@ export const JourneyMap: React.FC<JourneyMapProps> = ({
           {learningScenarios.map((scenario, index) => {
             const status = getScenarioStatus(scenario);
             const isAccessible = status !== 'locked';
-            const isCurrent = currentProgress.scenarioId === scenario.id;
+            const isCurrent = currentProgress.currentScenarioId === scenario.id;
 
             return (
               <motion.button
@@ -142,9 +150,9 @@ export const JourneyMap: React.FC<JourneyMapProps> = ({
                     {scenario.difficulty === 'beginner' ? 'Principiante' : 
                      scenario.difficulty === 'intermediate' ? 'Intermedio' : 'Avanzado'}
                   </span>
-                  {status === 'completed' && (
+                  {status === 'completed' && currentProgress.completedScenarios[scenario.id] && (
                     <span className="text-xs text-green-600 font-medium">
-                      {currentProgress.scenarioId === scenario.id ? currentProgress.bestScore : 0} puntos
+                      {Math.round(currentProgress.completedScenarios[scenario.id].performance.score)} puntos
                     </span>
                   )}
                 </div>

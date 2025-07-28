@@ -2,7 +2,7 @@
 
 import { create } from 'zustand'
 import { devtools, persist } from 'zustand/middleware'
-import { User, Session, AuthError } from '@supabase/supabase-js'
+import { User, Session } from '@supabase/supabase-js'
 import { getSupabaseClient } from '@/lib/supabase-client'
 
 // TypeScript interfaces
@@ -24,7 +24,7 @@ export interface UserProfile {
   last_sign_in_at?: string
 }
 
-export interface AuthError {
+export interface AuthErrorState {
   message: string
   status?: number
   code?: string
@@ -38,7 +38,7 @@ export interface AuthState {
   isAuthenticated: boolean
   isLoading: boolean
   isInitialized: boolean
-  error: AuthError | null
+  error: AuthErrorState | null
 
   // Actions
   signIn: (email: string, password: string) => Promise<void>
@@ -57,7 +57,7 @@ export interface AuthState {
   _setSession: (session: Session | null) => void
   _setProfile: (profile: UserProfile | null) => void
   _setLoading: (loading: boolean) => void
-  _setError: (error: AuthError | null) => void
+  _setError: (error: AuthErrorState | null) => void
   _setInitialized: (initialized: boolean) => void
   _initialize: () => Promise<void>
 }
@@ -393,7 +393,7 @@ export const useAuthStore = create<AuthState>()(
           set({ isLoading })
         },
 
-        _setError: (error: AuthError | null) => {
+        _setError: (error: AuthErrorState | null) => {
           set({ error })
         },
 

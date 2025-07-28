@@ -38,7 +38,8 @@ export function validateConfig(config: RealtimeConfig): Required<RealtimeConfig>
     autoReconnect: config.autoReconnect ?? DEFAULT_CONFIG.autoReconnect!,
     voice: config.voice ?? DEFAULT_CONFIG.voice!,
     instructions: config.instructions ?? '',
-    audioFormat: config.audioFormat ?? DEFAULT_CONFIG.audioFormat!,
+    inputAudioFormat: config.inputAudioFormat ?? DEFAULT_CONFIG.inputAudioFormat!,
+    outputAudioFormat: config.outputAudioFormat ?? DEFAULT_CONFIG.outputAudioFormat!,
     enableVAD: config.enableVAD ?? DEFAULT_CONFIG.enableVAD!,
     iceServers: config.iceServers ?? [
       { urls: 'stun:stun.l.google.com:19302' }

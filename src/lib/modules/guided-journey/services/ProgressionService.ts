@@ -1,4 +1,3 @@
-import { ModuleProgressTracker } from '@/lib/modules/core/ModuleProgressTracker';
 import { 
   journeyConfig, 
   type JourneyScenario, 
@@ -7,17 +6,25 @@ import {
   type JourneyStatistics,
   type DifficultySettings,
   type SupportLevel,
-  type ConversationMetrics
+  type ConversationMetrics,
+  type CompletedScenario
 } from '../journey-config';
 
+interface StreakData {
+  currentStreak: number;
+  longestStreak: number;
+  lastActivityDate: string;
+}
+
+interface ProgressData {
+  data: JourneyProgress;
+  lastUpdated: string;
+}
+
 export class ProgressionService {
-  private progressTracker: ModuleProgressTracker;
   private readonly STORAGE_KEY = 'guided_journey_progress';
   private readonly STREAK_KEY = 'guided_journey_streak';
-
-  constructor() {
-    this.progressTracker = new ModuleProgressTracker();
-  }
+  private readonly MODULE_KEY = 'guided-journey';
 
   async loadUserProgress(userId: string): Promise<JourneyProgress> {
     try {
@@ -26,8 +33,11 @@ export class ProgressionService {
         return stored ? JSON.parse(stored) : this.createInitialProgress();
       }
 
-      const progress = await this.progressTracker.getModuleProgress(userId, 'guided-journey');
-      return progress?.data || this.createInitialProgress();
+      // For authenticated users, we would load from a database
+      // For now, use localStorage with user-specific key
+      const userKey = `${this.STORAGE_KEY}_${userId}`;
+      const stored = localStorage.getItem(userKey);
+      return stored ? JSON.parse(stored) : this.createInitialProgress();
     } catch (error) {
       console.error('Error loading progress:', error);
       return this.createInitialProgress();
@@ -41,10 +51,9 @@ export class ProgressionService {
         return;
       }
 
-      await this.progressTracker.updateProgress(userId, 'guided-journey', {
-        data: progress,
-        lastUpdated: new Date().toISOString()
-      });
+      // For authenticated users, save with user-specific key
+      const userKey = `${this.STORAGE_KEY}_${userId}`;
+      localStorage.setItem(userKey, JSON.stringify(progress));
     } catch (error) {
       console.error('Error saving progress:', error);
       throw new Error('Failed to save progress');
@@ -58,10 +67,11 @@ export class ProgressionService {
   ): Promise<void> {
     const progress = await this.loadUserProgress(userId);
     
+    const existing = progress.completedScenarios[scenarioId];
     progress.completedScenarios[scenarioId] = {
       completedAt: new Date().toISOString(),
       performance,
-      attempts: (progress.completedScenarios[scenarioId]?.attempts || 0) + 1
+      attempts: (existing?.attempts || 0) + 1
     };
 
     progress.lastActivityDate = new Date().toISOString();
@@ -161,12 +171,12 @@ export class ProgressionService {
       yesterday.setDate(yesterday.getDate() - 1);
 
       if (lastActivity === yesterday.toDateString()) {
-        streakData.currentStreak++;
+        streakData.currentStreak = (streakData.currentStreak || 0) + 1;
       } else {
         streakData.currentStreak = 1;
       }
 
-      streakData.longestStreak = Math.max(streakData.currentStreak, streakData.longestStreak);
+      streakData.longestStreak = Math.max(streakData.currentStreak, streakData.longestStreak || 0);
       streakData.lastActivityDate = today;
 
       localStorage.setItem(streakKey, JSON.stringify(streakData));
@@ -277,7 +287,7 @@ export class ProgressionService {
     return Math.round((turnScore + durationScore) / 2);
   }
 
-  private getStreakData(key: string): any {
+  private getStreakData(key: string): StreakData {
     const stored = localStorage.getItem(key);
     return stored ? JSON.parse(stored) : {
       currentStreak: 0,

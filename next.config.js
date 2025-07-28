@@ -15,10 +15,41 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   webpack: (config) => {
-    // Exclude example files from compilation
+    // Exclude example files, test files, and other non-essential files from compilation
     config.module.rules.push({
-      test: /packages\/.*\/compat\/examples\/.*\.ts$/,
-      loader: 'ignore-loader'
+      test: /\.(ts|tsx|js|jsx)$/,
+      use: 'ignore-loader',
+      include: (modulePath) => {
+        // Convert to forward slashes for consistent matching
+        const normalizedPath = modulePath.replace(/\\/g, '/');
+        
+        // List of patterns to ignore
+        const shouldIgnore = 
+          // OpenAI WebRTC example files
+          normalizedPath.includes('packages/openai-realtime-webrtc/compat/examples/') ||
+          // Test files
+          /\.(test|spec)\.(ts|tsx|js|jsx)$/.test(normalizedPath) ||
+          normalizedPath.includes('/__tests__/') ||
+          normalizedPath.includes('/tests/') ||
+          // Mock files
+          normalizedPath.includes('/__mocks__/') ||
+          /\.mock\.(ts|tsx|js|jsx)$/.test(normalizedPath) ||
+          // Story files
+          /\.stories\.(ts|tsx|js|jsx)$/.test(normalizedPath) ||
+          // Example/demo directories
+          /\/(examples?|demos?|samples?)\//.test(normalizedPath) ||
+          // Test setup files
+          normalizedPath.includes('/setupTests.') ||
+          normalizedPath.includes('/test-utils.') ||
+          // Jest config files
+          normalizedPath.includes('/jest.config.') ||
+          // Cypress files
+          normalizedPath.includes('/cypress/') ||
+          // E2E test files
+          /\.e2e\.(ts|tsx|js|jsx)$/.test(normalizedPath);
+        
+        return shouldIgnore;
+      }
     });
     return config;
   },

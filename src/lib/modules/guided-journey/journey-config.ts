@@ -1,6 +1,55 @@
-import { LearningScenario } from '@/types/adaptive-learning';
-
 // Journey-specific types
+export type SupportLevel = 'full' | 'moderate' | 'minimal';
+
+export interface ScenarioPerformance {
+  score: number;
+  fluency: number;
+  accuracy: number;
+  engagement: number;
+  duration: number;
+  mistakes: number;
+}
+
+export interface ConversationMetrics {
+  duration: number;
+  totalTurns?: number;
+  avgResponseTime?: number;
+  conversationFlow?: number;
+  mistakes?: number;
+}
+
+export interface DifficultySettings {
+  speechSpeed: number;
+  supportLevel: SupportLevel;
+  hintsEnabled: boolean;
+}
+
+export interface JourneyStatistics {
+  totalScenarios: number;
+  completedScenarios: number;
+  averageScore: number;
+  currentStreak: number;
+  longestStreak: number;
+  totalConversations: number;
+  totalTimeSpent: number;
+  achievements: string[];
+}
+
+export interface CompletedScenario {
+  completedAt: string;
+  performance: ScenarioPerformance;
+  attempts: number;
+}
+
+export interface JourneyProgress {
+  userId: string;
+  currentScenarioId: string;
+  completedScenarios: Record<string, CompletedScenario>;
+  unlockedScenarios: string[];
+  achievements: string[];
+  totalConversations: number;
+  lastActivityDate: string;
+}
 export interface UnlockCriteria {
   comprehensionRate: number; // Percentage (0-100)
   vocabularyUsage: number; // Number of new words used
@@ -9,10 +58,14 @@ export interface UnlockCriteria {
 }
 
 export interface JourneyScenario {
+  id: string;
   scenarioId: string;
   order: number;
+  difficulty: number; // 1-5 stars
   difficultyLevel: number; // 1-5 stars
   difficultyLabel: string;
+  npcName: string; // NPC name for the scenario
+  location: string; // Location where the scenario takes place
   prerequisites: string[]; // IDs of scenarios that must be completed
   unlockCriteria: UnlockCriteria;
   bonusObjectives?: {
@@ -22,7 +75,7 @@ export interface JourneyScenario {
   }[];
 }
 
-export interface JourneyProgress {
+export interface JourneyProgressItem {
   scenarioId: string;
   completed: boolean;
   unlocked: boolean;
@@ -32,13 +85,41 @@ export interface JourneyProgress {
 }
 
 // Scenario mapping with difficulty levels
+export interface JourneyCategory {
+  id: string;
+  name: string;
+  description: string;
+  scenarios: JourneyScenario[];
+}
+
+// Helper function to get NPC name and location from scenario ID
+function getScenarioDetails(scenarioId: string): { npcName: string; location: string } {
+  const details: Record<string, { npcName: string; location: string }> = {
+    'taco_vendor': { npcName: 'Carlos', location: 'Street Food Market' },
+    'street_directions': { npcName: 'Ana', location: 'Calle Regina' },
+    'market_shopping': { npcName: 'Doña Maria', location: 'Mercado de Artesanías' },
+    'taxi_ride': { npcName: 'Miguel', location: 'Taxi Stand' },
+    'restaurant_ordering': { npcName: 'Sofía', location: 'Restaurant' },
+    'hotel_checkin': { npcName: 'Roberto', location: 'Hotel Lobby' },
+    'pharmacy_visit': { npcName: 'Dr. Martinez', location: 'Farmacia del Centro' },
+    'medical_appointment': { npcName: 'Dra. Lopez', location: 'Medical Clinic' },
+    'banking_service': { npcName: 'Sr. Hernandez', location: 'Banco Nacional' },
+    'job_interview': { npcName: 'Lic. Garcia', location: 'Corporate Office' },
+    'legal_consultation': { npcName: 'Abogada Ramirez', location: 'Law Office' }
+  };
+  return details[scenarioId] || { npcName: 'Assistant', location: 'Mexico City' };
+}
+
 export const journeyScenarios: JourneyScenario[] = [
   // Level 1 - Beginner (⭐)
   {
+    id: 'taco_vendor',
     scenarioId: 'taco_vendor',
     order: 1,
+    difficulty: 1,
     difficultyLevel: 1,
     difficultyLabel: 'Beginner',
+    ...getScenarioDetails('taco_vendor'),
     prerequisites: [], // Always unlocked
     unlockCriteria: {
       comprehensionRate: 70,
@@ -51,10 +132,13 @@ export const journeyScenarios: JourneyScenario[] = [
     ]
   },
   {
+    id: 'street_directions',
     scenarioId: 'street_directions',
     order: 2,
+    difficulty: 1,
     difficultyLevel: 1,
     difficultyLabel: 'Beginner',
+    ...getScenarioDetails('street_directions'),
     prerequisites: ['taco_vendor'],
     unlockCriteria: {
       comprehensionRate: 70,
@@ -67,10 +151,13 @@ export const journeyScenarios: JourneyScenario[] = [
   },
   // Level 2 - Easy (⭐⭐)
   {
+    id: 'market_shopping',
     scenarioId: 'market_shopping',
     order: 3,
+    difficulty: 2,
     difficultyLevel: 2,
     difficultyLabel: 'Easy',
+    ...getScenarioDetails('market_shopping'),
     prerequisites: ['street_directions'],
     unlockCriteria: {
       comprehensionRate: 70,
@@ -82,10 +169,13 @@ export const journeyScenarios: JourneyScenario[] = [
     ]
   },
   {
+    id: 'taxi_ride',
     scenarioId: 'taxi_ride',
     order: 4,
+    difficulty: 2,
     difficultyLevel: 2,
     difficultyLabel: 'Easy',
+    ...getScenarioDetails('taxi_ride'),
     prerequisites: ['market_shopping'],
     unlockCriteria: {
       comprehensionRate: 70,
@@ -95,10 +185,13 @@ export const journeyScenarios: JourneyScenario[] = [
   },
   // Level 3 - Intermediate (⭐⭐⭐)
   {
+    id: 'restaurant_ordering',
     scenarioId: 'restaurant_ordering',
     order: 5,
+    difficulty: 3,
     difficultyLevel: 3,
     difficultyLabel: 'Intermediate',
+    ...getScenarioDetails('restaurant_ordering'),
     prerequisites: ['taxi_ride'],
     unlockCriteria: {
       comprehensionRate: 75,
@@ -110,10 +203,13 @@ export const journeyScenarios: JourneyScenario[] = [
     ]
   },
   {
+    id: 'hotel_checkin',
     scenarioId: 'hotel_checkin',
     order: 6,
+    difficulty: 3,
     difficultyLevel: 3,
     difficultyLabel: 'Intermediate',
+    ...getScenarioDetails('hotel_checkin'),
     prerequisites: ['restaurant_ordering'],
     unlockCriteria: {
       comprehensionRate: 75,
@@ -123,10 +219,13 @@ export const journeyScenarios: JourneyScenario[] = [
     }
   },
   {
+    id: 'pharmacy_visit',
     scenarioId: 'pharmacy_visit',
     order: 7,
+    difficulty: 3,
     difficultyLevel: 3,
     difficultyLabel: 'Intermediate',
+    ...getScenarioDetails('pharmacy_visit'),
     prerequisites: ['hotel_checkin'],
     unlockCriteria: {
       comprehensionRate: 75,
@@ -136,10 +235,13 @@ export const journeyScenarios: JourneyScenario[] = [
   },
   // Level 4 - Advanced (⭐⭐⭐⭐)
   {
+    id: 'medical_appointment',
     scenarioId: 'medical_appointment',
     order: 8,
+    difficulty: 4,
     difficultyLevel: 4,
     difficultyLabel: 'Advanced',
+    ...getScenarioDetails('medical_appointment'),
     prerequisites: ['pharmacy_visit'],
     unlockCriteria: {
       comprehensionRate: 80,
@@ -149,10 +251,13 @@ export const journeyScenarios: JourneyScenario[] = [
     }
   },
   {
+    id: 'banking_service',
     scenarioId: 'banking_service',
     order: 9,
+    difficulty: 4,
     difficultyLevel: 4,
     difficultyLabel: 'Advanced',
+    ...getScenarioDetails('banking_service'),
     prerequisites: ['medical_appointment'],
     unlockCriteria: {
       comprehensionRate: 80,
@@ -163,10 +268,13 @@ export const journeyScenarios: JourneyScenario[] = [
   },
   // Level 5 - Expert (⭐⭐⭐⭐⭐)
   {
+    id: 'job_interview',
     scenarioId: 'job_interview',
     order: 10,
+    difficulty: 5,
     difficultyLevel: 5,
     difficultyLabel: 'Expert',
+    ...getScenarioDetails('job_interview'),
     prerequisites: ['banking_service'],
     unlockCriteria: {
       comprehensionRate: 85,
@@ -179,10 +287,13 @@ export const journeyScenarios: JourneyScenario[] = [
     ]
   },
   {
+    id: 'legal_consultation',
     scenarioId: 'legal_consultation',
     order: 11,
+    difficulty: 5,
     difficultyLevel: 5,
     difficultyLabel: 'Expert',
+    ...getScenarioDetails('legal_consultation'),
     prerequisites: ['job_interview'],
     unlockCriteria: {
       comprehensionRate: 85,
@@ -239,5 +350,37 @@ export const journeyConfig = {
     3: 'Intermediate',
     4: 'Advanced',
     5: 'Expert'
-  }
+  },
+  categories: [
+    {
+      id: 'beginner',
+      name: 'Beginner',
+      description: 'Start your Spanish journey with simple everyday scenarios',
+      scenarios: journeyScenarios.filter(s => s.difficulty === 1)
+    },
+    {
+      id: 'easy',
+      name: 'Easy',
+      description: 'Build confidence with slightly more complex interactions',
+      scenarios: journeyScenarios.filter(s => s.difficulty === 2)
+    },
+    {
+      id: 'intermediate',
+      name: 'Intermediate',
+      description: 'Handle real-world situations with growing fluency',
+      scenarios: journeyScenarios.filter(s => s.difficulty === 3)
+    },
+    {
+      id: 'advanced',
+      name: 'Advanced',
+      description: 'Navigate complex scenarios requiring cultural awareness',
+      scenarios: journeyScenarios.filter(s => s.difficulty === 4)
+    },
+    {
+      id: 'expert',
+      name: 'Expert',
+      description: 'Master professional and formal Spanish interactions',
+      scenarios: journeyScenarios.filter(s => s.difficulty === 5)
+    }
+  ] as JourneyCategory[]
 };
