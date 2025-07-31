@@ -11,7 +11,7 @@ import { ConversationTranscript } from '@/types'
 import { generateAdaptivePrompt, LearnerProfile } from '@/lib/pedagogical-system'
 import { LanguageLearningDB } from '@/lib/language-learning-db'
 import { GuestModeHeader } from '@/components/layout/GuestModeHeader'
-import { useConversationEngine } from '@/hooks/useConversationEngine'
+import { useConversationState } from '@/hooks/useConversationState'
 import { usePracticeAdaptation } from '@/hooks/usePracticeAdaptation'
 import { ProgressFeedback } from '@/components/practice/ProgressFeedback'
 import { VoiceControl } from '@/components/practice/VoiceControl'
@@ -168,9 +168,6 @@ function extractSpanishWords(text: string): string[] {
 
 export default function PracticeNoAuthPage() {
   const router = useRouter()
-  const [conversationStartTime, setConversationStartTime] = useState<Date | null>(null)
-  const [transcripts, setTranscripts] = useState<ConversationTranscript[]>([])
-  const [currentSpeaker, setCurrentSpeaker] = useState<string | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
   const [showSummary, setShowSummary] = useState(false)
   
@@ -295,45 +292,29 @@ MENU & PRICES:
 REMEMBER: You're not a language teacher, you're a taco vendor who happens to help tourists learn Spanish naturally.`;
   };
 
-  // Initialize conversation engine with Spanish analysis
-  const conversationEngine = useConversationEngine({
+  // Initialize conversation state with Spanish analysis
+  const conversationState = useConversationState({
     learnerProfile,
     onProfileUpdate: setLearnerProfile,
     onSaveProfile: saveProfileToStorage,
     scenario: SCENARIO // 🎯 Enable Spanish analysis
   });
+  
+  // Extract values from conversation state
+  const { transcripts, currentSpeaker, conversationStartTime, clearConversation } = conversationState;
 
   // Create refs for stable access
-  const conversationEngineRef = useRef(conversationEngine);
+  const conversationStateRef = useRef(conversationState);
   const adaptationSystemRef = useRef<any>(null);
 
   // Create stable callback for transcript handling
   const handleTranscript = useCallback(async (role: string, text: string) => {
     console.log('[PracticeNoAuth] onTranscript fired:', { role, text: text.substring(0, 50) + '...' });
     
-    // Process transcript through conversation engine
-    const { displayText, updatedProfile } = await conversationEngineRef.current.processTranscript(role as 'user' | 'assistant', text);
-    
-    // Add to transcript display
-    setTranscripts(prev => [...prev, {
-      id: crypto.randomUUID(),
-      speaker: role as 'user' | 'assistant',
-      text: displayText,
-      timestamp: new Date()
-    }]);
-    setCurrentSpeaker(role);
-    setTimeout(() => setCurrentSpeaker(null), 1000);
-    
-    // Process adaptation for user speech
-    if (role === 'user' && text && text.trim().length > 0) {
-      // Import detectComprehension for adaptation processing
-      const { detectComprehension } = await import('@/lib/pedagogical-system');
-      const { understood, confidence } = detectComprehension(text);
-      
-      if (adaptationSystemRef.current) {
-        await adaptationSystemRef.current.processPerformance(understood, confidence);
-      }
-    }
+    // Use the new addTranscript method which handles processing internally
+    await conversationStateRef.current.addTranscript(role as 'user' | 'assistant', text);
+    return; // The conversation state handles adding to transcripts internally
+    // The conversation state handles all of this internally now
   }, []);
 
   // Initialize OpenAI Realtime with stable callback
@@ -375,9 +356,9 @@ REMEMBER: You're not a language teacher, you're a taco vendor who happens to hel
 
   // Update refs when hooks change
   useEffect(() => {
-    conversationEngineRef.current = conversationEngine;
+    conversationStateRef.current = conversationState;
     adaptationSystemRef.current = adaptationSystem;
-  }, [conversationEngine, adaptationSystem]);
+  }, [conversationState, adaptationSystem]);
 
   // Load guest learner profile on mount
   useEffect(() => {
@@ -428,14 +409,14 @@ REMEMBER: You're not a language teacher, you're a taco vendor who happens to hel
   // Start conversation timer when first transcript appears
   useEffect(() => {
     if (transcripts.length > 0 && !conversationStartTime) {
-      setConversationStartTime(new Date());
+      // conversationStartTime is managed by conversationState
     }
   }, [transcripts, conversationStartTime]);
 
   const handleRestart = () => {
-    setTranscripts([]);
-    setConversationStartTime(null);
-    conversationEngine.resetSession();
+    clearConversation();
+    // conversationStartTime is cleared by clearConversation()
+    conversationState.clearConversation();
     adaptationSystem.resetAdaptation();
     disconnect();
     setTimeout(() => connect(), 500);
@@ -495,7 +476,7 @@ REMEMBER: You're not a language teacher, you're a taco vendor who happens to hel
   };
 
   // Get current state from hooks
-  const { sessionStats, lastComprehensionFeedback, getFullSpanishAnalysis, getDatabaseAnalysis } = conversationEngine;
+  const { sessionStats, lastComprehensionFeedback, getFullSpanishAnalysis, getDatabaseAnalysis } = conversationState;
   const { showAdaptationNotification, getAdaptationProgress } = adaptationSystem;
   const adaptationProgress = getAdaptationProgress();
   
@@ -503,9 +484,9 @@ REMEMBER: You're not a language teacher, you're a taco vendor who happens to hel
   const handleCloseSummary = () => {
     setShowSummary(false);
     // Reset state after closing summary
-    setTranscripts([]);
-    setConversationStartTime(null);
-    conversationEngine.resetSession();
+    clearConversation();
+    // conversationStartTime is cleared by clearConversation()
+    conversationState.clearConversation();
     adaptationSystem.resetAdaptation();
   };
   

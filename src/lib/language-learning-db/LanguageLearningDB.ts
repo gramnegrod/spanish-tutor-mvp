@@ -40,11 +40,11 @@ export class LanguageLearningDB {
   constructor(config: LanguageLearningDBConfig, adapter?: StorageAdapter) {
     this.config = config
     
-    // Initialize adapter
+    // Initialize adapter with fallback
     if (adapter) {
       this.adapter = adapter
     } else {
-      this.adapter = this.createAdapter(config.database.adapter)
+      this.adapter = this.createAdapterWithFallback(config.database.adapter)
     }
 
     // Initialize services
@@ -52,6 +52,25 @@ export class LanguageLearningDB {
     this.progress = new ProgressService(this.adapter)
     this.profiles = new ProfileService(this.adapter)
     this.analytics = new AnalyticsService(this.adapter)
+  }
+
+  /**
+   * Factory method to create storage adapter with fallback support
+   */
+  private createAdapterWithFallback(adapterType: string): StorageAdapter {
+    try {
+      return this.createAdapter(adapterType)
+    } catch (error) {
+      console.warn(`Failed to create ${adapterType} adapter:`, error)
+      console.warn('Falling back to LocalStorage adapter')
+      
+      try {
+        return this.createAdapter('localStorage')
+      } catch (fallbackError) {
+        console.warn('LocalStorage fallback failed, using Memory adapter')
+        return this.createAdapter('memory')
+      }
+    }
   }
 
   /**
@@ -68,10 +87,15 @@ export class LanguageLearningDB {
         return new LocalStorageAdapter(this.config.database.connection)
         
       case 'firebase':
-        throw new ConfigurationError('FirebaseAdapter not yet implemented. Use Supabase or LocalStorage.')
+        throw new ConfigurationError(
+          'FirebaseAdapter not yet implemented. ' +
+          'Available adapters: supabase, localStorage, memory. ' +
+          'Consider using createWithSupabase() for production or createWithLocalStorage()/createInMemory() for development.'
+        )
         
       case 'memory':
-        throw new ConfigurationError('MemoryAdapter not yet implemented. Use Supabase or LocalStorage.')
+        const { MemoryAdapter } = require('./adapters/MemoryAdapter')
+        return new MemoryAdapter(this.config.database.connection)
         
       default:
         throw new ConfigurationError(`Unsupported adapter type: ${adapterType}`)
@@ -95,12 +119,38 @@ export class LanguageLearningDB {
   /**
    * Check database health
    */
-  async health(): Promise<boolean> {
+  async health(): Promise<{
+    healthy: boolean
+    adapter: string
+    issues?: string[]
+  }> {
+    const issues: string[] = []
+    let healthy = true
+
     try {
-      return await this.adapter.health()
+      const adapterHealthy = await this.adapter.health()
+      if (!adapterHealthy) {
+        healthy = false
+        issues.push('Storage adapter health check failed')
+      }
     } catch (error) {
+      healthy = false
+      issues.push(`Health check error: ${error instanceof Error ? error.message : 'Unknown error'}`)
       console.error('[LanguageLearningDB] Health check failed:', error)
-      return false
+    }
+
+    // Test basic operations
+    try {
+      await this.adapter.getConversations({ limit: 1 })
+    } catch (error) {
+      healthy = false
+      issues.push('Conversation queries not working')
+    }
+
+    return {
+      healthy,
+      adapter: this.config.database.adapter,
+      issues: issues.length > 0 ? issues : undefined
     }
   }
 
@@ -221,14 +271,26 @@ export class LanguageLearningDB {
     projectId: string
     apiKey: string
   }): LanguageLearningDB {
-    throw new Error('Firebase adapter not yet implemented. Use createWithSupabase() or createWithLocalStorage()')
+    throw new ConfigurationError(
+      'Firebase adapter not yet implemented. ' +
+      'Use createWithSupabase() for production, createWithLocalStorage() for guest mode, ' +
+      'or createInMemory() for testing/development.'
+    )
   }
 
   /**
    * Create in-memory instance (testing/development)
    */
   static createInMemory(): LanguageLearningDB {
-    throw new Error('Memory adapter not yet implemented. Use createWithLocalStorage() for testing')
+    return new LanguageLearningDB({
+      database: {
+        adapter: 'memory'
+      },
+      features: {
+        enableAnalytics: false,
+        enableOfflineMode: true
+      }
+    })
   }
 }
 

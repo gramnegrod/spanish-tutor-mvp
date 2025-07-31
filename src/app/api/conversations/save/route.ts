@@ -11,7 +11,7 @@ export async function POST(request: Request) {
     const supabase = await createClient()
     
     // Check session first
-    const { data: { session } } = await supabase.auth.getSession()
+    await supabase.auth.getSession()
     
     const user = await dbHelpers.getCurrentUser(supabase)
     

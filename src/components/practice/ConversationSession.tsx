@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useCallback, useMemo, memo } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { RefreshCw, Loader2 } from 'lucide-react'
@@ -8,7 +8,7 @@ import { ConversationUI } from '@/components/audio/ConversationUI'
 import { SessionStatsDisplay } from '@/components/practice/SessionStats'
 import { SessionCostDisplay } from '@/components/practice/SessionCostDisplay'
 import { ConversationTranscript } from '@/types'
-import type { SessionStats } from '@/hooks/useConversationEngine'
+import type { SessionStats } from '@/hooks/useConversationState'
 
 interface ConversationSessionProps {
   title?: string
@@ -29,7 +29,7 @@ interface ConversationSessionProps {
   className?: string
 }
 
-export function ConversationSession({
+export const ConversationSession = memo(function ConversationSession({
   title = "Conversation",
   description,
   transcripts,
@@ -43,7 +43,33 @@ export function ConversationSession({
   onEnd,
   className = ''
 }: ConversationSessionProps) {
-  const hasConversation = transcripts.length > 0
+  // Memoize derived values
+  const hasConversation = useMemo(() => transcripts.length > 0, [transcripts.length])
+  
+  // Memoize button states to prevent unnecessary re-renders
+  const buttonDisabled = useMemo(() => !hasConversation || isAnalyzing, [hasConversation, isAnalyzing])
+  
+  // Memoize event handlers to prevent child re-renders
+  const handleRestart = useCallback(() => {
+    onRestart()
+  }, [onRestart])
+  
+  const handleEnd = useCallback(() => {
+    onEnd()
+  }, [onEnd])
+
+  // Memoize button content for end button
+  const endButtonContent = useMemo(() => {
+    if (isAnalyzing) {
+      return (
+        <>
+          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          Analyzing...
+        </>
+      )
+    }
+    return 'End & Analyze'
+  }, [isAnalyzing])
 
   return (
     <Card className={className}>
@@ -58,6 +84,7 @@ export function ConversationSession({
           transcripts={transcripts}
           isProcessing={isProcessing}
           currentSpeaker={currentSpeaker}
+          isConnected={isConnected}
         />
         
         {/* Live Session Stats */}
@@ -78,30 +105,23 @@ export function ConversationSession({
         {/* Action Buttons */}
         <div className="mt-4 flex gap-2">
           <Button 
-            onClick={onRestart}
+            onClick={handleRestart}
             variant="outline"
             className="flex-1"
-            disabled={!hasConversation || isAnalyzing}
+            disabled={buttonDisabled}
           >
             <RefreshCw className="h-4 w-4 mr-2" />
             Start Over
           </Button>
           <Button 
-            onClick={onEnd}
+            onClick={handleEnd}
             className="flex-1"
-            disabled={!hasConversation || isAnalyzing}
+            disabled={buttonDisabled}
           >
-            {isAnalyzing ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Analyzing...
-              </>
-            ) : (
-              'End & Analyze'
-            )}
+            {endButtonContent}
           </Button>
         </div>
       </CardContent>
     </Card>
   )
-}
+})

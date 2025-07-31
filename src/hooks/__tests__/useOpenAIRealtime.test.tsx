@@ -2,7 +2,7 @@ import { renderHook, act } from '@testing-library/react'
 import { useOpenAIRealtime } from '../useOpenAIRealtime'
 
 // Mock the OpenAIRealtimeService
-jest.mock('@openai-realtime/webrtc', () => ({
+jest.mock('@/services/openai-realtime', () => ({
   OpenAIRealtimeService: jest.fn().mockImplementation(() => ({
     connect: jest.fn().mockResolvedValue(undefined),
     disconnect: jest.fn(),

@@ -1,5 +1,5 @@
 import { SpanishConversationAnalysis } from '@/lib/spanish-analysis'
-import { SessionStats } from '@/hooks/useConversationEngine'
+import { SessionStats } from '@/hooks/useConversationState'
 import { Progress } from '@/components/ui/progress'
 
 interface VocabularyProgressBarProps {

@@ -4,7 +4,6 @@ import "./globals.css"
 import { Providers } from "./providers"
 // import { GlobalNav } from "@/components/navigation/GlobalNav"
 import { SimpleBrowseButton } from "@/components/navigation/SimpleBrowseButton"
-import { ErrorLogViewerWrapper } from '@/components/debug/ErrorLogViewerWrapper'
 
 const inter = Inter({ subsets: ["latin"] })
 

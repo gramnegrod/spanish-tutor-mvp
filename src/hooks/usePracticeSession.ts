@@ -4,9 +4,8 @@ import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { useOpenAIRealtime } from '@/hooks/useOpenAIRealtime'
-import { useConversationEngine } from '@/hooks/useConversationEngine'
+import { useConversationState } from '@/hooks/useConversationState'
 import { usePracticeAdaptation, AdaptationNotification } from '@/hooks/usePracticeAdaptation'
-import { useTranscriptManager } from '@/hooks/useTranscriptManager'
 import { generateAdaptivePrompt, LearnerProfile } from '@/lib/pedagogical-system'
 import { LanguageLearningDB } from '@/lib/language-learning-db'
 import type { ConversationTranscript } from '@/types'
@@ -98,15 +97,26 @@ export function usePracticeSession({
     ...initialProfile
   })
   
-  // Transcript management
+  // Initialize conversation state (combines transcript management and conversation engine)
+  const conversationState = useConversationState({
+    learnerProfile,
+    onProfileUpdate: setLearnerProfile,
+    onSaveProfile: saveUserAdaptations,
+    scenario: enableAnalysis ? scenario : undefined
+  })
+  
+  // Extract needed values
   const {
     transcripts,
     currentSpeaker,
     conversationStartTime,
     addTranscript,
-    clearTranscripts,
-    setCurrentSpeaker
-  } = useTranscriptManager()
+    clearConversation: clearTranscripts,
+    setCurrentSpeaker,
+    sessionStats,
+    lastComprehensionFeedback,
+    getFullSpanishAnalysis
+  } = conversationState
   
   // Initialize Language Learning DB
   const db = useMemo(() => {
@@ -160,30 +170,17 @@ export function usePracticeSession({
     return generateAdaptivePrompt(npcName, npcDescription, profile)
   }, [npcName, npcDescription, customInstructions])
   
-  // Initialize conversation engine
-  const conversationEngine = useConversationEngine({
-    learnerProfile,
-    onProfileUpdate: setLearnerProfile,
-    onSaveProfile: saveUserAdaptations,
-    scenario: enableAnalysis ? scenario : undefined
-  })
-  
-  const conversationEngineRef = useRef(conversationEngine)
+  // Keep a ref to the conversation state for callbacks
+  const conversationStateRef = useRef(conversationState)
   useEffect(() => {
-    conversationEngineRef.current = conversationEngine
-  }, [conversationEngine])
+    conversationStateRef.current = conversationState
+  }, [conversationState])
   
   // Handle transcript from OpenAI
   const handleTranscript = useCallback(async (role: 'user' | 'assistant', text: string) => {
-    const { displayText } = await conversationEngineRef.current.processTranscript(role, text)
-    
-    // Only add transcript if there's actual content to display
-    if (displayText && displayText.trim()) {
-      addTranscript(role, displayText)
-    } else {
-      console.log('[usePracticeSession] Skipping empty transcript:', { role, originalText: text })
-    }
-  }, [addTranscript])
+    // The new addTranscript handles processing internally
+    await conversationStateRef.current.addTranscript(role, text)
+  }, [])
   
   // Initialize OpenAI Realtime
   const {
@@ -380,12 +377,12 @@ export function usePracticeSession({
   
   const handleRestart = useCallback(() => {
     clearTranscripts()
-    conversationEngine.resetSession()
+    // Clear conversation resets the session
     if (enableAdaptation) {
       adaptationSystem.resetAdaptation()
     }
     startFreshSession()
-  }, [clearTranscripts, conversationEngine, adaptationSystem, enableAdaptation, startFreshSession])
+  }, [clearTranscripts, adaptationSystem, enableAdaptation, startFreshSession])
   
   const handleCloseSummary = useCallback(() => {
     setShowSummary(false)
@@ -393,7 +390,7 @@ export function usePracticeSession({
   }, [router])
   
   // Get current state
-  const { sessionStats, lastComprehensionFeedback, getFullSpanishAnalysis } = conversationEngine
+  // Session stats and analysis are already extracted from conversationState above
   const { showAdaptationNotification, getAdaptationProgress } = adaptationSystem
   const adaptationProgress = enableAdaptation ? getAdaptationProgress() : null
   

@@ -1,4 +1,4 @@
-import { ComprehensionFeedback } from '@/hooks/useConversationEngine'
+import { ComprehensionFeedback } from '@/hooks/useConversationState'
 import { Card, CardContent } from '@/components/ui/card'
 import { Award, TrendingUp, MessageCircle } from 'lucide-react'
 

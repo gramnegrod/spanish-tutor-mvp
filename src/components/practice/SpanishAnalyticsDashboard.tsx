@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { TrendingUp, Award } from 'lucide-react'
 import { VocabularyProgressBar } from '@/components/spanish-analysis/VocabularyProgressBar'
 import { SpanishFeedbackDisplay } from '@/components/spanish-analysis/SpanishFeedbackDisplay'
-import type { SessionStats, ComprehensionFeedback } from '@/hooks/useConversationEngine'
+import type { SessionStats, ComprehensionFeedback } from '@/hooks/useConversationState'
 import type { SpanishConversationAnalysis } from '@/lib/spanish-analysis'
 
 interface SpanishAnalyticsDashboardProps {

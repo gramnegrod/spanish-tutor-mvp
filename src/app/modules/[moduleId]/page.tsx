@@ -1,7 +1,7 @@
 'use client'
 
 import { useParams, useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { getModule } from '@/lib/modules'
 import { guidedJourneyModule } from '@/lib/modules/guided-journey'
 import { JourneyMap } from '@/lib/modules/guided-journey'
@@ -17,15 +17,11 @@ export default function ModulePage() {
   const [loading, setLoading] = useState(true)
   const [journeyProgress, setJourneyProgress] = useState<JourneyProgress | null>(null)
   
-  useEffect(() => {
-    loadModuleData()
-  }, [moduleId, user])
-  
-  async function loadModuleData() {
+  const loadModuleData = useCallback(async () => {
     try {
-      const module = getModule(moduleId)
+      const moduleData = getModule(moduleId)
       
-      if (!module) {
+      if (!moduleData) {
         router.push('/modules')
         return
       }
@@ -42,16 +38,20 @@ export default function ModulePage() {
       console.error('Failed to load module:', error)
       setLoading(false)
     }
-  }
+  }, [moduleId, user, router])
+  
+  useEffect(() => {
+    loadModuleData()
+  }, [loadModuleData])
   
   function handleScenarioSelect(scenarioId: string) {
     const route = guidedJourneyModule.getPracticeRoute(scenarioId, !!user)
     router.push(route)
   }
   
-  function handleBack() {
-    router.push('/modules')
-  }
+  // function handleBack() {
+  //   router.push('/modules')
+  // }
   
   if (loading) {
     return (

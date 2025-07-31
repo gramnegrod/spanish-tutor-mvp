@@ -12,11 +12,11 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { ArrowLeft, Clock, MapPin, User, Lock, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Clock, MapPin, User, CheckCircle } from 'lucide-react';
 
 export default function MexicoCityAdventurePage() {
   const router = useRouter();
-  const [adventureProgress, setAdventureProgress] = useState(() => {
+  const [adventureProgress] = useState(() => {
     // Try to load existing progress
     const saved = loadAdventureProgress();
     if (saved) return saved;
@@ -289,7 +289,7 @@ export default function MexicoCityAdventurePage() {
         {/* Learning Goals */}
         <Card className="mt-8">
           <CardHeader>
-            <CardTitle>What You'll Master</CardTitle>
+            <CardTitle>What You&apos;ll Master</CardTitle>
           </CardHeader>
           <CardContent>
             <ul className="grid grid-cols-1 md:grid-cols-2 gap-2">

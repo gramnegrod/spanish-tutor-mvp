@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { progressService, dbHelpers } from '@/lib/supabase-db'
 import { createClient } from '@/utils/supabase/server'
 
-export async function GET(request: Request) {
+export async function GET(_request: Request) {
   try {
     // Create server client with proper cookie handling
     const supabase = await createClient()

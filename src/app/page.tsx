@@ -1,16 +1,13 @@
 'use client'
 
-import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { Mic, Trophy, Zap, Globe } from 'lucide-react'
+import { Mic, Zap, Globe } from 'lucide-react'
 import { motion } from 'framer-motion'
 
 export default function HomePage() {
-  const router = useRouter()
-  const { user, loading } = useAuth()
+  const { user } = useAuth()
 
   // Remove auto-redirect - let users see the landing page
   // They can manually click to go to practice

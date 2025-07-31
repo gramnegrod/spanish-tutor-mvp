@@ -31,6 +31,7 @@ export { ModuleService } from './services/ModuleService'
 
 export { SupabaseAdapter } from './adapters/SupabaseAdapter'
 export { LocalStorageAdapter } from './adapters/LocalStorageAdapter'
+export { MemoryAdapter } from './adapters/MemoryAdapter'
 
 // ============================================================================
 // Type Exports
@@ -123,10 +124,10 @@ export function createGuestDB(): LanguageLearningDB {
 
 /**
  * Quick setup for development/testing
- * @deprecated Use createGuestDB() instead - Memory adapter not yet implemented
  */
 export function createMemoryDB(): LanguageLearningDB {
-  throw new Error('Memory adapter not yet implemented. Use createGuestDB() instead.')
+  const { LanguageLearningDB } = require('./LanguageLearningDB')
+  return LanguageLearningDB.createInMemory()
 }
 
 // ============================================================================

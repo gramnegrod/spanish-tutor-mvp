@@ -45,6 +45,7 @@ export interface UseOpenAIRealtimeReturn {
 }
 
 export function useOpenAIRealtime(options: UseOpenAIRealtimeOptions = {}): UseOpenAIRealtimeReturn {
+
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -157,17 +158,23 @@ export function useOpenAIRealtime(options: UseOpenAIRealtimeOptions = {}): UseOp
   }, []); // Only initialize once
   
   const connect = useCallback(async () => {
-    if (!serviceRef.current || isConnected || isConnecting) return;
-    
-    setIsConnecting(true);
-    setError(null);
-    
+    // Removed performance monitoring
     try {
-      await serviceRef.current.connect(audioRef.current || undefined);
+      if (!serviceRef.current || isConnected || isConnecting) return;
+      
+      setIsConnecting(true);
+      setError(null);
+      
+      try {
+        await serviceRef.current.connect(audioRef.current || undefined);
+      } catch (err) {
+        setIsConnecting(false);
+        setError(err instanceof Error ? err : new Error(String(err)));
+        // Error handling is done in the service events
+      }
     } catch (err) {
-      setIsConnecting(false);
-      setError(err instanceof Error ? err : new Error(String(err)));
-      // Error handling is done in the service events
+      // Re-throw to maintain behavior
+      throw err;
     }
   }, [isConnected, isConnecting]);
   
@@ -177,18 +184,19 @@ export function useOpenAIRealtime(options: UseOpenAIRealtimeOptions = {}): UseOp
   }, []);
   
   const updateInstructions = useCallback(async (instructions: string) => {
-    console.log('🔄 [useOpenAIRealtime] updateInstructions called');
-    console.log('📝 [useOpenAIRealtime] Instructions length:', instructions.length);
-    console.log('🔗 [useOpenAIRealtime] Service available:', !!serviceRef.current);
-    
-    if (!serviceRef.current) {
-      console.error('❌ [useOpenAIRealtime] No service available for updateInstructions');
-      return;
-    }
-    
-    console.log('✅ [useOpenAIRealtime] Calling service.updateInstructions...');
-    await serviceRef.current.updateInstructions(instructions);
-    console.log('✨ [useOpenAIRealtime] updateInstructions call completed');
+    // Removed performance monitoring
+      console.log('🔄 [useOpenAIRealtime] updateInstructions called');
+      console.log('📝 [useOpenAIRealtime] Instructions length:', instructions.length);
+      console.log('🔗 [useOpenAIRealtime] Service available:', !!serviceRef.current);
+      
+      if (!serviceRef.current) {
+        console.error('❌ [useOpenAIRealtime] No service available for updateInstructions');
+        return;
+      }
+      
+      console.log('✅ [useOpenAIRealtime] Calling service.updateInstructions...');
+      await serviceRef.current.updateInstructions(instructions);
+      console.log('✨ [useOpenAIRealtime] updateInstructions call completed');
   }, []);
   
   const extendSession = useCallback(() => {
@@ -233,6 +241,7 @@ export function useOpenAIRealtime(options: UseOpenAIRealtimeOptions = {}): UseOp
       connect();
     }
   }, []); // Only run once on mount, not when options change
+  
   
   return {
     // State

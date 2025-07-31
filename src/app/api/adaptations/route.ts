@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { adaptationsService, dbHelpers } from '@/lib/supabase-db'
 import { createClient } from '@/utils/supabase/server'
 
-export async function GET(request: Request) {
+export async function GET(_request: Request) {
   try {
     const supabase = await createClient()
     const user = await dbHelpers.getCurrentUser(supabase)
