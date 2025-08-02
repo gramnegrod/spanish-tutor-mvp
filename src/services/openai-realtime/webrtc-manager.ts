@@ -9,6 +9,8 @@ export class WebRTCManager {
   private dc: RTCDataChannel | null = null;
   private config: RealtimeConfig;
   private onConnectionError?: (error: Error) => void;
+  private onConnectionRecovered?: () => void;
+  private disconnectTimer: NodeJS.Timeout | null = null;
 
   constructor(config: RealtimeConfig) {
     this.config = config;
@@ -16,6 +18,10 @@ export class WebRTCManager {
 
   setErrorHandler(handler: (error: Error) => void): void {
     this.onConnectionError = handler;
+  }
+
+  setRecoveryHandler(handler: () => void): void {
+    this.onConnectionRecovered = handler;
   }
 
   async connect(mediaStream?: MediaStream, onTrackHandler?: (e: RTCTrackEvent) => void): Promise<{ pc: RTCPeerConnection; dc: RTCDataChannel }> {
@@ -59,11 +65,48 @@ export class WebRTCManager {
     // Monitor ICE connection state
     this.pc.oniceconnectionstatechange = () => {
       console.log('[WebRTCManager] ICE connection state:', this.pc?.iceConnectionState);
-      if (this.pc?.iceConnectionState === 'failed' || this.pc?.iceConnectionState === 'disconnected') {
-        const error = new Error(`ICE connection ${this.pc.iceConnectionState}. Check network connectivity.`);
-        console.error('[WebRTCManager] ICE connection issue:', error);
+      
+      // Handle different ICE connection states
+      if (this.pc?.iceConnectionState === 'checking') {
+        console.log('[WebRTCManager] ICE checking in progress...');
+      } else if (this.pc?.iceConnectionState === 'failed') {
+        const error = new Error('ICE connection failed. Check network connectivity.');
+        console.error('[WebRTCManager] ICE connection failed:', error);
         if (this.onConnectionError) {
           this.onConnectionError(error);
+        }
+      } else if (this.pc?.iceConnectionState === 'disconnected') {
+        console.warn('[WebRTCManager] ICE connection disconnected - may be temporary, waiting for recovery...');
+        
+        // Clear any existing timer
+        if (this.disconnectTimer) {
+          clearTimeout(this.disconnectTimer);
+        }
+        
+        // Set a timeout to check if it recovers
+        this.disconnectTimer = setTimeout(() => {
+          if (this.pc?.iceConnectionState === 'disconnected') {
+            console.error('[WebRTCManager] ICE connection still disconnected after 5s');
+            const error = new Error('ICE connection disconnected. Check network connectivity.');
+            if (this.onConnectionError) {
+              this.onConnectionError(error);
+            }
+          }
+          this.disconnectTimer = null;
+        }, 5000);
+      } else if (this.pc?.iceConnectionState === 'connected' || this.pc?.iceConnectionState === 'completed') {
+        console.log('[WebRTCManager] ICE connection established successfully');
+        
+        // Clear disconnect timer if connection recovered
+        if (this.disconnectTimer) {
+          clearTimeout(this.disconnectTimer);
+          this.disconnectTimer = null;
+          console.log('[WebRTCManager] Connection recovered, cancelled disconnect timer');
+          
+          // Notify about recovery
+          if (this.onConnectionRecovered) {
+            this.onConnectionRecovered();
+          }
         }
       }
     };
@@ -193,6 +236,12 @@ export class WebRTCManager {
   }
 
   disconnect(): void {
+    // Clear any pending disconnect timer
+    if (this.disconnectTimer) {
+      clearTimeout(this.disconnectTimer);
+      this.disconnectTimer = null;
+    }
+    
     // Close data channel
     if (this.dc) {
       this.dc.close();

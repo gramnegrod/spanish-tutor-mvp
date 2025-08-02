@@ -100,6 +100,12 @@ export class OpenAIRealtimeService {
         this.handleError(error);
       });
       
+      // Setup WebRTC recovery handling
+      this.webrtcManager.setRecoveryHandler(() => {
+        console.log('[OpenAIRealtimeService] Connection recovered');
+        this.updateStatus('Connected');
+      });
+      
       // Setup WebRTC connection (now includes microphone track AND ontrack handler)
       this.updateStatus('Creating connection...');
       const { pc, dc } = await this.webrtcManager.connect(mediaStream, (e) => {
@@ -209,6 +215,15 @@ export class OpenAIRealtimeService {
 
   private handleError(error: Error): void {
     console.error('OpenAI Realtime Error:', error);
+    
+    // Don't immediately surface temporary disconnection errors to the user
+    if (error.message.includes('ICE connection disconnected')) {
+      console.log('[OpenAIRealtimeService] Handling temporary disconnection, waiting for recovery...');
+      this.updateStatus('Connection interrupted - attempting to recover...');
+      return;
+    }
+    
+    // For other errors, pass them through
     this.events.onError?.(error);
   }
 
