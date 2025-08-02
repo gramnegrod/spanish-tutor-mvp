@@ -66,6 +66,7 @@ const AdaptationNotificationDisplay = memo(({ notification }: { notification: Ad
       switched_to_helper: 'bg-blue-50 border-blue-300 text-blue-800',
       switched_to_immersion: 'bg-purple-50 border-purple-300 text-purple-800',
       building_confidence: 'bg-green-50 border-green-300 text-green-800',
+      need_practice: 'bg-orange-50 border-orange-300 text-orange-800',
       default: 'bg-yellow-50 border-yellow-300 text-yellow-800'
     }
     return `${baseClasses} ${typeClasses[notification.type] || typeClasses.default}`
@@ -76,6 +77,7 @@ const AdaptationNotificationDisplay = memo(({ notification }: { notification: Ad
       switched_to_helper: '🤝',
       switched_to_immersion: '🚀',
       building_confidence: '📈',
+      need_practice: '📚',
       default: '💪'
     }
     return emojis[notification.type] || emojis.default

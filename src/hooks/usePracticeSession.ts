@@ -97,11 +97,14 @@ export function usePracticeSession({
     ...initialProfile
   })
   
+  // We'll define saveUserAdaptations after DB initialization to avoid circular dependency
+  const saveUserAdaptationsRef = useRef<((profile: LearnerProfile) => Promise<void>) | null>(null)
+  
   // Initialize conversation state (combines transcript management and conversation engine)
   const conversationState = useConversationState({
     learnerProfile,
     onProfileUpdate: setLearnerProfile,
-    onSaveProfile: saveUserAdaptations,
+    onSaveProfile: saveUserAdaptationsRef.current || undefined,
     scenario: enableAnalysis ? scenario : undefined
   })
   
@@ -156,6 +159,11 @@ export function usePracticeSession({
       console.error('[usePracticeSession] Failed to save adaptations:', error)
     }
   }, [db, enableAuth, user])
+  
+  // Set the ref after the function is defined
+  useEffect(() => {
+    saveUserAdaptationsRef.current = saveUserAdaptations
+  }, [saveUserAdaptations])
   
   // Generate AI instructions
   const generateInstructions = useCallback((profile: LearnerProfile) => {
