@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { ProgressCard } from '@/components/dashboard/ProgressCard'
@@ -15,18 +15,10 @@ export default function DashboardPage() {
   const router = useRouter()
   const [progress, setProgress] = useState<Progress | null>(null)
   const [streak, setStreak] = useState(0)
-  const [conversations, setConversations] = useState<any[]>([])
+  const [conversations, setConversations] = useState<unknown[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
-  useEffect(() => {
-    if (!loading && !user) {
-      router.push('/login')
-    } else if (!loading && user) {
-      fetchData()
-    }
-  }, [user, loading, router])
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     if (!user) {
       setIsLoading(false)
       return
@@ -56,7 +48,15 @@ export default function DashboardPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [user])
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push('/login')
+    } else if (!loading && user) {
+      fetchData()
+    }
+  }, [user, loading, router, fetchData])
 
   if (loading || isLoading) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>

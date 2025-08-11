@@ -3,7 +3,6 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { User } from '@supabase/supabase-js'
 import { getSupabaseClient } from '@/lib/supabase-client'
-import { useRouter } from 'next/navigation'
 
 interface AuthContextType {
   user: User | null
@@ -19,7 +18,6 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
-  const router = useRouter()
   const supabase = getSupabaseClient()
 
   useEffect(() => {
@@ -62,31 +60,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('[AuthContext] Auth state change:', event, !!session?.user)
       setUser(session?.user ?? null)
-      
-      // Handle redirects after authentication - only redirect from login/register pages
-      if (event === 'SIGNED_IN' && session?.user) {
-        const currentPath = window.location.pathname;
-        // Only redirect if user is coming from auth pages
-        if (currentPath === '/login' || currentPath === '/register' || currentPath === '/') {
-          router.push('/practice-v2?dest=mexico-city&npc=taco_vendor')
-        }
-        // Let users stay on other pages (dashboard, adventures, etc.)
-      }
     })
 
     return () => subscription.unsubscribe()
-  }, [router, supabase.auth])
+  }, [supabase.auth])
 
   const signIn = async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
-    // Auth state change will handle redirect
   }
 
   const signUp = async (email: string, password: string) => {
     const { error } = await supabase.auth.signUp({ email, password })
     if (error) throw error
-    // Don't redirect - let the component handle showing success message
   }
 
   const signInWithMagicLink = async (email: string) => {
@@ -102,7 +88,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     const { error } = await supabase.auth.signOut()
     if (error) throw error
-    router.push('/')
   }
 
   return (

@@ -1,23 +1,39 @@
-import { NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { z } from 'zod'
+import { withSecurity, validateRequest, createSecureResponse, sanitizeText } from '@/lib/api-security'
 
-export async function POST(request: Request) {
+// Input validation schema
+const registerSchema = z.object({
+  email: z.string().email('Invalid email format').max(255),
+  password: z.string()
+    .min(8, 'Password must be at least 8 characters')
+    .max(100, 'Password too long')
+    .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+    .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+    .regex(/[0-9]/, 'Password must contain at least one number'),
+  name: z.string().min(1).max(100).optional().transform(val => val ? sanitizeText(val) : undefined)
+})
+
+async function handler(request: NextRequest) {
   try {
-    const { email, password, name } = await request.json()
-
-    if (!email || !password) {
-      return NextResponse.json(
-        { error: 'Email and password are required' },
+    // Validate and sanitize input
+    const validation = await validateRequest(request, registerSchema)
+    if (!validation.success) {
+      return createSecureResponse(
+        { error: validation.error },
         { status: 400 }
       )
     }
+
+    const { email, password, name } = validation.data
 
     // Check for required environment variables
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
     if (!supabaseUrl || !supabaseServiceKey) {
-      return NextResponse.json(
+      return createSecureResponse(
         { error: 'Server configuration error' },
         { status: 500 }
       )
@@ -36,7 +52,7 @@ export async function POST(request: Request) {
 
     if (authError) {
       if (authError.message.includes('already registered')) {
-        return NextResponse.json(
+        return createSecureResponse(
           { error: 'User already exists' },
           { status: 409 }
         )
@@ -63,7 +79,7 @@ export async function POST(request: Request) {
       // Don't fail the registration if progress creation fails
     }
 
-    return NextResponse.json({
+    return createSecureResponse({
       message: 'User created successfully',
       user: {
         id: authData.user.id,
@@ -73,9 +89,19 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     console.error('Registration error:', error)
-    return NextResponse.json(
+    return createSecureResponse(
       { error: 'Failed to create user' },
       { status: 500 }
     )
   }
 }
+
+// Export with security wrapper
+export const POST = withSecurity(handler, {
+  rateLimit: {
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    maxRequests: 5 // Only 5 registration attempts per 15 minutes
+  },
+  maxBodySize: 10 * 1024, // 10KB
+  requireAuth: false // Registration doesn't require auth
+})

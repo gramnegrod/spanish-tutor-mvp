@@ -3,15 +3,14 @@
 import React from 'react'
 import { Button } from '@/components/ui/button'
 import { useRouter } from 'next/navigation'
+import type { CostTracking } from '@/services/openai-realtime/types'
 
 interface SessionModalsProps {
   showTimeWarning: boolean
   timeWarningMinutes: number
   showSessionComplete: boolean
   showMaxSessions: boolean
-  costs?: {
-    totalCost: number
-  }
+  costs?: CostTracking | null
   onDismissWarning: () => void
   onSessionContinue: (extend: boolean) => void
   onDisconnect: () => void

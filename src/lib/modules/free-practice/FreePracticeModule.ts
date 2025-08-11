@@ -215,10 +215,8 @@ export class FreePracticeModule implements LearningModule {
   }
   
   getPracticeRoute(scenarioId: string, isAuthenticated: boolean): string {
-    // Return the appropriate route based on auth status
-    return isAuthenticated 
-      ? `/practice?scenario=${scenarioId}` 
-      : `/practice-no-auth?scenario=${scenarioId}`;
+    // Always use practice-v2 regardless of auth status
+    return `/practice-v2?scenario=${scenarioId}`;
   }
 }
 

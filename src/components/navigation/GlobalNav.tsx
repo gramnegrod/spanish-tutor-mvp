@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/contexts/AuthContext'
-import { Home, Users, MessageSquare, LogOut, Menu, BookOpen } from 'lucide-react'
+import { Home, Users, MessageSquare, LogOut, Menu } from 'lucide-react'
 import { useState } from 'react'
 
 export function GlobalNav() {
@@ -19,12 +19,6 @@ export function GlobalNav() {
   
   const navItems = [
     { href: '/', label: 'Home', icon: Home },
-    { 
-      href: '/modules', 
-      label: 'Learning Modules', 
-      icon: BookOpen,
-      highlight: true 
-    },
     { 
       href: '/practice-v2/select-npc', 
       label: 'Browse Characters', 
@@ -52,11 +46,6 @@ export function GlobalNav() {
                 <Link key={item.href} href={item.href}>
                   <Button
                     variant={pathname === item.href ? 'default' : 'ghost'}
-                    className={
-                      item.highlight 
-                        ? 'bg-purple-600 hover:bg-purple-700 text-white' 
-                        : ''
-                    }
                   >
                     <item.icon className="w-4 h-4 mr-2" />
                     {item.label}
@@ -96,11 +85,7 @@ export function GlobalNav() {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`block px-3 py-2 rounded-md text-base font-medium ${
-                    item.highlight 
-                      ? 'bg-purple-600 text-white' 
-                      : 'text-gray-700 hover:bg-gray-50'
-                  }`}
+                  className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-50"
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   <div className="flex items-center">

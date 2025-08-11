@@ -18,7 +18,10 @@ import {
   checkEssentialVocabulary,
   type ConversationTurn,
   type AnalysisContext,
-  type SpanishConversationAnalysis 
+  type SpanishConversationAnalysis,
+  type VocabularyAnalysisResult,
+  type StruggleAnalysisResult,
+  SpanishConversationAnalyzer
 } from '@/lib/spanish-analysis'
 
 // Re-export types from the original hooks
@@ -55,6 +58,11 @@ export interface ConversationStateOptions {
   scenario?: string;
 }
 
+export interface DatabaseAnalysis {
+  vocabularyAnalysis: VocabularyAnalysisResult;
+  struggleAnalysis: StruggleAnalysisResult;
+}
+
 export interface UseConversationStateReturn {
   // Combined transcript and conversation state
   transcripts: ConversationTranscript[];
@@ -70,10 +78,10 @@ export interface UseConversationStateReturn {
   clearConversation: () => void;
   setCurrentSpeaker: (speaker: string | null) => void;
   getFullSpanishAnalysis: () => SpanishConversationAnalysis | null;
-  getDatabaseAnalysis: () => any;
+  getDatabaseAnalysis: () => DatabaseAnalysis | null;
   
   // Spanish analyzer instance
-  spanishAnalyzer: any;
+  spanishAnalyzer: SpanishConversationAnalyzer;
 }
 
 export function useConversationState(options: ConversationStateOptions): UseConversationStateReturn {
@@ -175,7 +183,11 @@ export function useConversationState(options: ConversationStateOptions): UseConv
         onProfileUpdate(updatedProfile);
         
         if (onSaveProfile) {
-          await onSaveProfile(updatedProfile);
+          // Non-blocking save to prevent audio interruption
+          onSaveProfile(updatedProfile).catch(error => {
+            console.warn('[ConversationState] Profile save failed (non-critical):', error);
+            // Continue conversation despite save failure
+          });
         }
       }
     }
@@ -309,7 +321,11 @@ export function useConversationState(options: ConversationStateOptions): UseConv
       setTimeout(() => setLastComprehensionFeedback(null), 3000);
       
       if (onSaveProfile) {
-        await onSaveProfile(updatedProfile);
+        // Non-blocking save to prevent audio interruption
+        onSaveProfile(updatedProfile).catch(error => {
+          console.warn('[ConversationState] Profile save failed after user speech (non-critical):', error);
+          // Continue conversation despite save failure
+        });
       }
     }
   }, [learnerProfile, conversationHistory, onProfileUpdate, onSaveProfile, scenario]);

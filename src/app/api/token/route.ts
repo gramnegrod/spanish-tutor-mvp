@@ -1,27 +1,14 @@
 import { NextRequest } from 'next/server'
-import { withSecurity, createSecureResponse } from '@/lib/api-security'
-import { createClient } from '@/utils/supabase/server'
-import { dbHelpers } from '@/lib/supabase-db'
+import { createSecureResponse } from '@/lib/api-security'
 
-async function handler(_request: NextRequest) {
+export async function POST(_request: NextRequest) {
   try {
-    // Authenticate user
-    const supabase = await createClient()
-    const user = await dbHelpers.getCurrentUser(supabase)
-    if (!user) {
-      return createSecureResponse(
-        { error: 'Authentication required' },
-        { status: 401 }
-      )
-    }
     const apiKey = process.env.OPENAI_API_KEY || process.env.NEXT_PUBLIC_OPENAI_API_KEY;
-    
-    // Security: Removed API key logging
     
     if (!apiKey) {
       console.error('No OpenAI API key found in environment variables');
       return createSecureResponse(
-        { error: 'OpenAI API key not configured. Please set OPENAI_API_KEY environment variable.' },
+        { error: 'OpenAI API key not configured.' },
         { status: 500 }
       )
     }
@@ -34,7 +21,7 @@ async function handler(_request: NextRequest) {
       },
       body: JSON.stringify({
         model: "gpt-4o-realtime-preview-2024-12-17",
-        voice: "alloy", // or "verse"
+        voice: "alloy",
       }),
     })
 
@@ -52,7 +39,11 @@ async function handler(_request: NextRequest) {
     }
 
     const data = await response.json()
-    return createSecureResponse(data)
+    
+    // Return in the format your NPM module expects
+    return createSecureResponse({
+      token: data.client_secret.value
+    })
     
   } catch (error) {
     console.error('Session creation error:', error)
@@ -63,12 +54,3 @@ async function handler(_request: NextRequest) {
     )
   }
 }
-
-// Export with security wrapper
-export const GET = withSecurity(handler, {
-  rateLimit: {
-    windowMs: 60 * 1000, // 1 minute
-    maxRequests: 20 // 20 requests per minute (session creation is expensive)
-  },
-  requireAuth: true
-})

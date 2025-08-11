@@ -2,7 +2,7 @@
  * Session Lifecycle and Timer Management Module
  */
 
-import { SessionInfo, RealtimeConfig, RealtimeEvents } from './types';
+import { SessionInfo, RealtimeConfig, RealtimeEvents, SessionConfiguration } from './types';
 import { SESSION_LIMITS } from './constants';
 
 export class SessionManager {
@@ -147,7 +147,7 @@ export class SessionManager {
         includesCorrectCharacter: true
       });
       
-      const sessionConfig: any = {
+      const sessionConfig: SessionConfiguration = {
         type: 'session.update',
         session: {
           modalities: ['text', 'audio'],

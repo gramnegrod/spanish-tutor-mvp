@@ -148,7 +148,7 @@ export class GuidedJourneyModule implements LearningModule {
 
   // Get the practice route for a scenario
   getPracticeRoute(scenarioId: string, isAuthenticated: boolean): string {
-    const baseRoute = isAuthenticated ? '/practice-v2' : '/practice-no-auth'
+    const baseRoute = '/practice-v2'
     const scenario = journeyScenarios.find(s => s.id === scenarioId)
     
     if (!scenario) {

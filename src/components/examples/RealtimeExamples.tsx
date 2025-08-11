@@ -262,7 +262,7 @@ export function CostTrackingExample() {
 
 // Example 5: Advanced Service Usage (without hook)
 export function AdvancedServiceExample() {
-  const [service, setService] = useState<any>(null);
+  const [service, setService] = useState<import('@/services/openai-realtime').OpenAIRealtimeService | null>(null);
   const [costs, setCosts] = useState<CostTracking | null>(null);
   
   const handleConnect = async () => {

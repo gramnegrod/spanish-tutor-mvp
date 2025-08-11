@@ -33,7 +33,9 @@ export class EventHandler {
 
     switch (event.type) {
       case 'error':
-        this.events.onError?.(new Error(event.error.message));
+        if (event.error) {
+          this.events.onError?.(new Error(event.error.message || 'Unknown error'));
+        }
         break;
         
       case 'input_audio_buffer.speech_started':
@@ -76,9 +78,11 @@ export class EventHandler {
         break;
         
       case 'response.audio_transcript.done':
-        console.log('[EventHandler] Assistant transcript:', event.transcript);
-        this.conversationManager.addEntry('assistant', event.transcript);
-        this.events.onTranscript?.('assistant', event.transcript);
+        if (event.transcript) {
+          console.log('[EventHandler] Assistant transcript:', event.transcript);
+          this.conversationManager.addEntry('assistant', event.transcript);
+          this.events.onTranscript?.('assistant', event.transcript);
+        }
         // Audio duration will be tracked in response.done event via audio_tokens
         break;
         
@@ -89,10 +93,19 @@ export class EventHandler {
       // Cost tracking events
       case 'response.audio.delta':
         // Track audio output duration
-        if (event.delta && event.delta.length > 0) {
-          // PCM16 audio: 2 bytes per sample, 24000 samples per second
-          const durationMs = (event.delta.length / AUDIO_CONSTANTS.pcm16BytesPerSecond) * 1000;
-          this.costTracker.trackAudioDuration('output', durationMs);
+        if (event.delta) {
+          let deltaLength = 0;
+          if (event.delta instanceof ArrayBuffer) {
+            deltaLength = event.delta.byteLength;
+          } else if (typeof event.delta === 'string') {
+            deltaLength = event.delta.length;
+          }
+          
+          if (deltaLength > 0) {
+            // PCM16 audio: 2 bytes per sample, 24000 samples per second
+            const durationMs = (deltaLength / AUDIO_CONSTANTS.pcm16BytesPerSecond) * 1000;
+            this.costTracker.trackAudioDuration('output', durationMs);
+          }
         }
         break;
         
@@ -125,6 +138,30 @@ export class EventHandler {
         if (event.response?.usage) {
           this.costTracker.updateFromUsage(event.response.usage);
         }
+        break;
+        
+      case 'output_audio_buffer.started':
+        console.log('[EventHandler] Audio output buffer started');
+        this.events.onAudioStart?.();
+        break;
+        
+      case 'output_audio_buffer.stopped':
+        console.log('[EventHandler] Audio output buffer stopped, response complete');
+        // Notify that audio playback is complete
+        this.events.onAudioComplete?.();
+        break;
+        
+      case 'output_audio_buffer.cleared':
+        console.log('[EventHandler] Audio output buffer cleared (interrupted)');
+        this.events.onAudioInterrupted?.();
+        break;
+        
+      case 'output_audio_buffer.speech_started':
+        console.log('[EventHandler] Speech started in output buffer');
+        break;
+        
+      case 'output_audio_buffer.speech_stopped':
+        console.log('[EventHandler] Speech stopped in output buffer');
         break;
     }
   }

@@ -8,6 +8,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { LearnerProfile } from '@/lib/pedagogical-system'
+import type { AdaptationProgress } from './usePracticeSession'
 
 export interface AdaptationNotification {
   type: 'switched_to_helper' | 'switched_to_immersion' | 'building_confidence' | 'need_practice';
@@ -22,7 +23,17 @@ export interface AdaptationOptions {
   generateInstructions?: (profile: LearnerProfile) => string;
 }
 
-export function usePracticeAdaptation(options: AdaptationOptions) {
+export interface UsePracticeAdaptationReturn {
+  consecutiveSuccesses: number;
+  consecutiveFailures: number;
+  showAdaptationNotification: AdaptationNotification | null;
+  processPerformance: (understood: boolean, confidence: number) => void;
+  resetAdaptation: () => void;
+  getAdaptationProgress: () => AdaptationProgress;
+  REQUIRED_CONFIRMATIONS: number;
+}
+
+export function usePracticeAdaptation(options: AdaptationOptions): UsePracticeAdaptationReturn {
   const { 
     learnerProfile, 
     onProfileUpdate, 
@@ -149,9 +160,12 @@ export function usePracticeAdaptation(options: AdaptationOptions) {
         // Use debounced instruction update
         debouncedInstructionUpdate(newProfile);
         
-        // Save profile if handler provided
+        // Save profile if handler provided (non-blocking)
         if (onSaveProfile) {
-          await onSaveProfile(newProfile);
+          onSaveProfile(newProfile).catch(error => {
+            console.warn('[PracticeAdaptation] Profile save failed (non-critical):', error);
+            // Continue conversation despite save failure
+          });
         }
         
         // Show mode switch notification
@@ -218,9 +232,12 @@ export function usePracticeAdaptation(options: AdaptationOptions) {
         // Use debounced instruction update
         debouncedInstructionUpdate(newProfile);
         
-        // Save profile if handler provided
+        // Save profile if handler provided (non-blocking)
         if (onSaveProfile) {
-          await onSaveProfile(newProfile);
+          onSaveProfile(newProfile).catch(error => {
+            console.warn('[PracticeAdaptation] Profile save failed (non-critical):', error);
+            // Continue conversation despite save failure
+          });
         }
         
         // Show mode switch notification
@@ -273,17 +290,17 @@ export function usePracticeAdaptation(options: AdaptationOptions) {
   }, []);
   
   // Get current adaptation progress info
-  const getAdaptationProgress = useCallback(() => {
+  const getAdaptationProgress = useCallback((): AdaptationProgress => {
     if (learnerProfile.needsMoreEnglish) {
       return {
-        mode: 'helper',
+        mode: 'helper' as const,
         progress: consecutiveSuccesses,
         target: REQUIRED_CONFIRMATIONS,
         description: consecutiveSuccesses > 0 ? `${consecutiveSuccesses}/2 successes` : 'Ready to help'
       };
     } else {
       return {
-        mode: 'immersion',
+        mode: 'immersion' as const,
         progress: consecutiveFailures,
         target: REQUIRED_CONFIRMATIONS,
         description: consecutiveFailures > 0 ? `${consecutiveFailures}/2 struggles` : 'Doing great'

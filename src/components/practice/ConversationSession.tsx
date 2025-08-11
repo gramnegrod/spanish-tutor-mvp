@@ -9,6 +9,7 @@ import { SessionStatsDisplay } from '@/components/practice/SessionStats'
 import { SessionCostDisplay } from '@/components/practice/SessionCostDisplay'
 import { ConversationTranscript } from '@/types'
 import type { SessionStats } from '@/hooks/useConversationState'
+import type { CostTracking } from '@/services/openai-realtime/types'
 
 interface ConversationSessionProps {
   title?: string
@@ -18,11 +19,7 @@ interface ConversationSessionProps {
   currentSpeaker: 'user' | 'assistant' | null
   isConnected?: boolean
   sessionStats?: SessionStats
-  costs?: {
-    totalCost: number
-    audioInputSeconds: number
-    audioOutputSeconds: number
-  }
+  costs?: CostTracking | null
   isAnalyzing?: boolean
   onRestart: () => void
   onEnd: () => void

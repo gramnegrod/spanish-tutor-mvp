@@ -20,9 +20,14 @@ export function logError(error: Error, context: ErrorContext) {
     userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined
   }
 
-  // In development, log to console
+  // In development, log to console with structured format
   if (process.env.NODE_ENV === 'development') {
-    console.error('[Error Logger]', errorLog)
+    console.error('[Error Logger]', {
+      code: errorLog.code,
+      message: errorLog.message,
+      stack: errorLog.stack,
+      metadata: errorLog.metadata
+    })
   }
 
   // In production, send to error tracking service

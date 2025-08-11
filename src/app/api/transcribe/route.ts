@@ -1,10 +1,22 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
+import { withSecurity, createSecureResponse } from '@/lib/api-security'
+import { createClient } from '@/utils/supabase/server'
+import { dbHelpers } from '@/lib/supabase-db'
 
-export async function POST(request: NextRequest) {
+async function handler(request: NextRequest) {
   try {
+    // Authenticate user
+    const supabase = await createClient()
+    const user = await dbHelpers.getCurrentUser(supabase)
+    if (!user) {
+      return createSecureResponse(
+        { error: 'Authentication required' },
+        { status: 401 }
+      )
+    }
     // Check for API key
     if (!process.env.OPENAI_API_KEY) {
-      return NextResponse.json(
+      return createSecureResponse(
         { error: 'OpenAI API key not configured' },
         { status: 500 }
       )
@@ -15,7 +27,7 @@ export async function POST(request: NextRequest) {
     const audioFile = formData.get('file') as File
     
     if (!audioFile) {
-      return NextResponse.json(
+      return createSecureResponse(
         { error: 'No audio file provided' },
         { status: 400 }
       )
@@ -23,7 +35,7 @@ export async function POST(request: NextRequest) {
 
     // Check file size (API limit is 25MB)
     if (audioFile.size > 25 * 1024 * 1024) {
-      return NextResponse.json(
+      return createSecureResponse(
         { error: 'Audio file too large. Maximum size is 25MB.' },
         { status: 400 }
       )
@@ -48,20 +60,30 @@ export async function POST(request: NextRequest) {
     if (!response.ok) {
       const error = await response.text()
       console.error('OpenAI transcription error:', error)
-      return NextResponse.json(
+      return createSecureResponse(
         { error: `Transcription failed: ${response.statusText}` },
         { status: response.status }
       )
     }
 
     const transcript = await response.json()
-    return NextResponse.json(transcript)
+    return createSecureResponse(transcript)
 
   } catch (error) {
     console.error('Transcription API error:', error)
-    return NextResponse.json(
+    return createSecureResponse(
       { error: 'Internal server error' },
       { status: 500 }
     )
   }
 }
+
+// Export with security wrapper
+export const POST = withSecurity(handler, {
+  rateLimit: {
+    windowMs: 60 * 1000, // 1 minute
+    maxRequests: 20 // 20 transcriptions per minute
+  },
+  maxBodySize: 25 * 1024 * 1024, // 25MB for audio files
+  requireAuth: true
+})

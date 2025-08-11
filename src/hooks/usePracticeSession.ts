@@ -4,11 +4,21 @@ import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { useOpenAIRealtime } from '@/hooks/useOpenAIRealtime'
-import { useConversationState } from '@/hooks/useConversationState'
+import { useConversationState, SessionStats, ComprehensionFeedback } from '@/hooks/useConversationState'
 import { usePracticeAdaptation, AdaptationNotification } from '@/hooks/usePracticeAdaptation'
 import { generateAdaptivePrompt, LearnerProfile } from '@/lib/pedagogical-system'
 import { LanguageLearningDB } from '@/lib/language-learning-db'
 import type { ConversationTranscript } from '@/types'
+import type { CostTracking, SessionInfo } from '@/services/openai-realtime/types'
+import type { SpanishConversationAnalysis } from '@/lib/spanish-analysis/types'
+
+// Types for interfaces that are not yet defined elsewhere
+export interface AdaptationProgress {
+  mode: 'helper' | 'immersion'
+  progress: number
+  target: number
+  description: string
+}
 
 export interface UsePracticeSessionOptions {
   scenario: string
@@ -43,17 +53,17 @@ export interface UsePracticeSessionReturn {
   handleCloseSummary: () => void
   
   // Analytics
-  sessionStats: any
-  lastComprehensionFeedback: any
-  getFullSpanishAnalysis: () => any
-  costs: any
+  sessionStats: SessionStats
+  lastComprehensionFeedback: ComprehensionFeedback | null
+  getFullSpanishAnalysis: () => SpanishConversationAnalysis | null
+  costs: CostTracking | null
   
   // Learner profile
   learnerProfile: LearnerProfile
   
   // Adaptation
   showAdaptationNotification: AdaptationNotification | null
-  adaptationProgress: any
+  adaptationProgress: AdaptationProgress | null
   
   // Audio ref
   audioRef: React.RefObject<HTMLAudioElement | null>
@@ -63,7 +73,7 @@ export interface UsePracticeSessionReturn {
   timeWarningMinutes: number
   showSessionComplete: boolean
   showMaxSessions: boolean
-  sessionInfo: any
+  sessionInfo: SessionInfo | null
   extendSession: () => void
   dismissWarning: () => void
   handleSessionContinue: (extend: boolean) => void

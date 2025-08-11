@@ -37,7 +37,7 @@ export function UserSettingsForm({
             value={userSettings.competency_level}
             onChange={(e) => onSettingsChange({
               ...userSettings,
-              competency_level: e.target.value as any
+              competency_level: e.target.value as 'beginner' | 'intermediate' | 'advanced'
             })}
             className="w-full px-3 py-2 bg-gray-700 text-white rounded"
           >
@@ -57,7 +57,7 @@ export function UserSettingsForm({
               ...userSettings,
               speech_settings: {
                 ...userSettings.speech_settings,
-                speaking_speed: e.target.value as any
+                speaking_speed: e.target.value as 'slow' | 'normal' | 'fast'
               }
             })}
             className="w-full px-3 py-2 bg-gray-700 text-white rounded"

@@ -11,8 +11,7 @@ const nextConfig = {
     ignoreDuringBuilds: true, // Temporarily ignore ESLint errors during build
   },
   typescript: {
-    // Temporarily ignore TypeScript errors to deploy
-    ignoreBuildErrors: true,
+    // Temporarily ignore TypeScript errors to deploy - this has been fixed
   },
   webpack: (config) => {
     // Exclude test files and other non-essential files from compilation

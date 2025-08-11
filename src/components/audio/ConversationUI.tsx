@@ -126,7 +126,7 @@ SpeakingIndicator.displayName = 'SpeakingIndicator'
 
 export const ConversationUI = memo(function ConversationUI({ 
   transcripts, 
-  isProcessing = false,
+  isProcessing: _isProcessing = false,
   currentSpeaker,
   isConnected = false
 }: ConversationUIProps) {

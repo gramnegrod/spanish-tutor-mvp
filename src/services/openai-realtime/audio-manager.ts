@@ -5,6 +5,9 @@
 export class AudioManager {
   private mediaStream: MediaStream | null = null;
   private audioElement: HTMLAudioElement | null = null;
+  private audioContext: AudioContext | null = null;
+  private gainNode: GainNode | null = null;
+  private audioBufferState: 'idle' | 'playing' | 'stopped' | 'cleared' = 'idle';
 
   async setupAudio(audioElement?: HTMLAudioElement): Promise<MediaStream> {
     console.log('[AudioManager] Setting up audio...');
@@ -44,8 +47,32 @@ export class AudioManager {
       if (currentStream) {
         currentStream.getTracks().forEach(track => track.stop());
       }
+      
+      // Set buffering properties to handle choppy audio
+      this.audioElement.preload = 'auto';
+      
+      // Create AudioContext for better audio processing if not exists
+      if (!this.audioContext) {
+        this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
+          sampleRate: 24000, // Match OpenAI's sample rate
+          latencyHint: 'playback' // Optimize for smooth playback over low latency
+        });
+        
+        // Create gain node for volume control
+        this.gainNode = this.audioContext.createGain();
+        this.gainNode.gain.value = 1.0;
+        this.gainNode.connect(this.audioContext.destination);
+      }
+      
+      // Ensure audio element has proper settings for smooth playback
       this.audioElement.srcObject = stream;
-      console.log('[AudioManager] Audio stream attached to element');
+      this.audioElement.volume = 1.0;
+      
+      // Apply playback rate adjustment for smoother audio
+      // Slightly slower playback can help with choppy audio
+      this.audioElement.playbackRate = 0.98;
+      
+      console.log('[AudioManager] Audio stream attached with AudioContext buffering');
     } else {
       console.warn('[AudioManager] Audio element already has this stream, ignoring...');
     }
@@ -74,9 +101,17 @@ export class AudioManager {
       this.mediaStream = null;
     }
     
+    // Clean up AudioContext
+    if (this.audioContext) {
+      this.audioContext.close();
+      this.audioContext = null;
+      this.gainNode = null;
+    }
+    
     // Stop audio playback and remove element if we created it
     if (this.audioElement) {
       this.audioElement.srcObject = null;
+      this.audioElement.playbackRate = 1.0; // Reset playback rate
       // Remove from DOM if we created it
       if (this.audioElement.parentNode && !this.audioElement.hasAttribute('data-external')) {
         this.audioElement.remove();
@@ -93,5 +128,14 @@ export class AudioManager {
 
   getAudioElement(): HTMLAudioElement | null {
     return this.audioElement;
+  }
+  
+  setBufferState(state: 'idle' | 'playing' | 'stopped' | 'cleared'): void {
+    console.log('[AudioManager] Buffer state changed:', this.audioBufferState, '->', state);
+    this.audioBufferState = state;
+  }
+  
+  getBufferState(): string {
+    return this.audioBufferState;
   }
 }

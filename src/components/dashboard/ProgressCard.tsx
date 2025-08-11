@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/types'
-import { TrendingUp, Book, Mic, Brain, Globe } from 'lucide-react'
+import { TrendingUp, Book, Mic, Globe } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 

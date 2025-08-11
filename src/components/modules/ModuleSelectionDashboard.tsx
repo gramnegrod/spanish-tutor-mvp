@@ -3,8 +3,7 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useRouter } from 'next/navigation'
-import { getAvailableModules, getModule, registerAllModules } from '@/lib/modules'
-import { LanguageLearningDB } from '@/lib/language-learning-db'
+import { getAvailableModules, registerAllModules } from '@/lib/modules'
 import { useAuthStore } from '@/store/authStore'
 import type { LearningModule, ModuleProgress } from '@/lib/modules/core/types'
 
@@ -134,7 +133,7 @@ export default function ModuleSelectionDashboard() {
     // Navigate based on module type
     if (module.id === 'free-practice') {
       // Free practice goes to existing practice page
-      router.push(user ? '/practice-v2' : '/practice-no-auth')
+      router.push('/practice-v2')
     } else if (module.id === 'guided-journey') {
       // Guided journey will have its own dashboard
       router.push(`/modules/${module.id}`)

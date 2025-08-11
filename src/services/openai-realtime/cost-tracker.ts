@@ -2,7 +2,7 @@
  * Cost Tracking Module for OpenAI Realtime API
  */
 
-import { CostTracking } from './types';
+import { CostTracking, RealtimeUsage } from './types';
 import { PRICING, AUDIO_CONSTANTS } from './constants';
 
 export class CostTracker {
@@ -46,7 +46,7 @@ export class CostTracker {
     this.calculateCosts();
   }
 
-  updateFromUsage(usage: any): void {
+  updateFromUsage(usage: RealtimeUsage): void {
     // Track input audio tokens and calculate duration
     if (usage.input_token_details?.audio_tokens) {
       const inputAudioSeconds = usage.input_token_details.audio_tokens / AUDIO_CONSTANTS.audioTokensPerSecond;

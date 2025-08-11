@@ -44,27 +44,12 @@ export default function HomePage() {
                       🗺️ Choose Your Adventure
                     </Button>
                   </Link>
-                  <Link href="/practice-v2?dest=mexico-city&npc=taco_vendor">
-                    <Button size="lg" className="w-full sm:w-auto">
-                      🌮 Classic Taquero
-                    </Button>
-                  </Link>
-                  <Link href="/adaptive-practice">
-                    <Button size="lg" className="w-full sm:w-auto bg-purple-600 hover:bg-purple-700">
-                      🧠 Adaptive Learning
-                    </Button>
-                  </Link>
                 </>
               ) : (
                 <>
                   <Link href="/practice-v2/select-npc">
                     <Button size="lg" className="w-full sm:w-auto bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600">
-                      🗺️ Explore All Characters - Free!
-                    </Button>
-                  </Link>
-                  <Link href="/practice-v2?dest=mexico-city&npc=taco_vendor&guest=true">
-                    <Button size="lg" className="w-full sm:w-auto bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600">
-                      🌮 Quick Taquero Practice
+                      🗺️ Choose Your Adventure
                     </Button>
                   </Link>
                   <Link href="/login">
@@ -103,8 +88,8 @@ export default function HomePage() {
                 Traditional apps teach you to translate. We teach you to <span className="font-semibold">think in Spanish</span>.
               </p>
               <p className="mb-6">
-                You'll talk to a taco vendor who says <span className="italic">"¿Qué onda, güero?"</span> instead of 
-                textbook Spanish. When you're confused, they'll explain <span className="font-semibold">like a friend would</span> - 
+                You&apos;ll talk to a taco vendor who says <span className="italic">&quot;¿Qué onda, güero?&quot;</span> instead of 
+                textbook Spanish. When you&apos;re confused, they&apos;ll explain <span className="font-semibold">like a friend would</span> - 
                 mixing Spanish and English naturally, just like real bilingual Mexicans do.
               </p>
               <p>
@@ -140,7 +125,7 @@ export default function HomePage() {
               </div>
               <h3 className="text-xl font-semibold mb-2">Immersive Context</h3>
               <p className="text-gray-600">
-                You're not "practicing Spanish" - you're ordering tacos, negotiating prices, 
+                You&apos;re not &quot;practicing Spanish&quot; - you&apos;re ordering tacos, negotiating prices, 
                 making friends. The language comes naturally.
               </p>
             </motion.div>
@@ -156,7 +141,7 @@ export default function HomePage() {
               </div>
               <h3 className="text-xl font-semibold mb-2">Natural Code-Switching</h3>
               <p className="text-gray-600">
-                Our AI tutors explain in Spanglish when you're stuck - exactly how 
+                Our AI tutors explain in Spanglish when you&apos;re stuck - exactly how 
                 bilingual friends help each other learn.
               </p>
             </motion.div>
@@ -172,7 +157,7 @@ export default function HomePage() {
               </div>
               <h3 className="text-xl font-semibold mb-2">Mexican, Not Generic</h3>
               <p className="text-gray-600">
-                Learn real Mexican Spanish - "¿Mande?", "ahorita", "güey" - 
+                Learn real Mexican Spanish - &quot;¿Mande?&quot;, &quot;ahorita&quot;, &quot;güey&quot; - 
                 not textbook Latin American Spanish.
               </p>
             </motion.div>
@@ -196,20 +181,20 @@ export default function HomePage() {
               <div className="bg-white p-6 rounded-lg shadow-sm">
                 <h3 className="font-bold text-xl mb-3 text-green-600">✅ This is for you if:</h3>
                 <ul className="space-y-2 text-gray-700">
-                  <li>• You're planning to visit or live in Mexico</li>
+                  <li>• You&apos;re planning to visit or live in Mexico</li>
                   <li>• You want to connect with Mexican friends/family</li>
-                  <li>• You're tired of apps that teach "neutral" Spanish</li>
+                  <li>• You&apos;re tired of apps that teach &quot;neutral&quot; Spanish</li>
                   <li>• You learn better through conversation than rules</li>
                   <li>• You want to sound natural, not like a textbook</li>
                 </ul>
               </div>
               <div className="bg-white p-6 rounded-lg shadow-sm">
-                <h3 className="font-bold text-xl mb-3 text-red-600">❌ This isn't for you if:</h3>
+                <h3 className="font-bold text-xl mb-3 text-red-600">❌ This isn&apos;t for you if:</h3>
                 <ul className="space-y-2 text-gray-700">
                   <li>• You need to pass a formal Spanish exam</li>
                   <li>• You want to learn Argentinian/Spanish from Spain</li>
                   <li>• You prefer structured grammar lessons</li>
-                  <li>• You're looking for business/academic Spanish</li>
+                  <li>• You&apos;re looking for business/academic Spanish</li>
                   <li>• You want written Spanish practice</li>
                 </ul>
               </div>
@@ -225,14 +210,9 @@ export default function HomePage() {
             <h2 className="text-3xl font-bold text-gray-900 mb-4">
               11 Authentic Mexico City Characters
             </h2>
-            <p className="text-xl text-gray-600 mb-8">
+            <p className="text-xl text-gray-600">
               Practice with locals in real situations
             </p>
-            <Link href="/practice-v2/select-npc">
-              <Button size="lg" className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600">
-                🗺️ Choose Your Character
-              </Button>
-            </Link>
           </div>
 
           <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
@@ -257,7 +237,7 @@ export default function HomePage() {
               className="bg-white rounded-lg p-6 shadow-sm border border-gray-100"
             >
               <div className="text-3xl mb-3">🚕</div>
-              <h3 className="text-lg font-semibold mb-2">Juan 'El Capi' - Taxi Driver</h3>
+              <h3 className="text-lg font-semibold mb-2">Juan &apos;El Capi&apos; - Taxi Driver</h3>
               <p className="text-gray-600 text-sm mb-3">
                 Navigate the city with chilango slang and mariachi rhythm
               </p>
@@ -322,12 +302,7 @@ export default function HomePage() {
           </div>
 
           <div className="text-center mt-8">
-            <p className="text-gray-600 mb-4">Plus 5 more characters including pharmacy, museum guide, Uber driver...</p>
-            <Link href="/practice-v2/select-npc">
-              <Button variant="outline" size="lg">
-                See All 11 Characters →
-              </Button>
-            </Link>
+            <p className="text-gray-600">Plus 5 more characters including pharmacy, museum guide, Uber driver...</p>
           </div>
         </div>
       </div>
@@ -341,15 +316,10 @@ export default function HomePage() {
           <p className="text-xl mb-8 text-orange-100">
             Join thousands learning authentic conversational Spanish
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/practice-no-auth">
+          <div className="flex justify-center">
+            <Link href="/practice-v2/select-npc">
               <Button size="lg" variant="secondary" className="bg-white text-orange-600 hover:bg-gray-100">
-                Try it Free - No Sign Up
-              </Button>
-            </Link>
-            <Link href="/register">
-              <Button size="lg" variant="outline" className="border-white text-white hover:bg-white hover:text-orange-600">
-                Create Free Account
+                🗺️ Start Your Adventure Now
               </Button>
             </Link>
           </div>

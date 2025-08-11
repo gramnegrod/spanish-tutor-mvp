@@ -2,8 +2,7 @@ import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
 import { Providers } from "./providers"
-// import { GlobalNav } from "@/components/navigation/GlobalNav"
-import { SimpleBrowseButton } from "@/components/navigation/SimpleBrowseButton"
+import { GlobalNav } from "@/components/navigation/GlobalNav"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -21,8 +20,7 @@ export default function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <Providers>
-          {/* <GlobalNav /> */}
-          <SimpleBrowseButton />
+          <GlobalNav />
           <div className="min-h-screen bg-gradient-to-br from-orange-50 to-red-50">
             {children}
           </div>

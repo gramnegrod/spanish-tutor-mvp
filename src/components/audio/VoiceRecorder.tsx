@@ -63,7 +63,9 @@ export function VoiceRecorder({
         } 
       })
 
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
+      // Create AudioContext with proper browser compatibility
+      const AudioContextClass = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+      audioContextRef.current = new AudioContextClass!()
       const source = audioContextRef.current.createMediaStreamSource(stream)
       analyserRef.current = audioContextRef.current.createAnalyser()
       analyserRef.current.fftSize = 256

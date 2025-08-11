@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Mic, Loader2, RefreshCw, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { LearnerProfile } from '@/lib/pedagogical-system'
 import { useState, useEffect } from 'react'
+import type { AdaptationProgress } from '@/hooks/usePracticeSession'
 
 interface VoiceControlProps {
   isConnected: boolean;
@@ -18,12 +19,7 @@ interface VoiceControlProps {
   learnerProfile: LearnerProfile;
   onConnect: () => void;
   hasManuallyConnected?: boolean;
-  adaptationProgress?: {
-    mode: string;
-    progress: number;
-    target: number;
-    description: string;
-  };
+  adaptationProgress?: AdaptationProgress | null;
   children?: React.ReactNode; // For additional UI like session stats
   connectionError?: string | null;
   isUpdatingInstructions?: boolean;

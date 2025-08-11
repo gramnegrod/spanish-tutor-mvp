@@ -133,7 +133,7 @@ function PracticeContent() {
         subtitle={npc.role}
         scenario={npc.scenario_type || 'general'}
         showVocabularyGuide={true}
-        vocabularyWordsUsed={currentAnalysis?.wordsUsed?.map((w: any) => w.word) || []}
+        vocabularyWordsUsed={currentAnalysis?.wordsUsed?.map((w: { word: string }) => w.word) || []}
       >
       {/* Hidden audio element */}
       <audio ref={audioRef} autoPlay hidden />

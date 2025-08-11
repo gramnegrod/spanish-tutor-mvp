@@ -38,7 +38,7 @@ const MetricCard = memo(({
   label, 
   iconColor 
 }: { 
-  icon: React.ComponentType<any>
+  icon: React.ComponentType<{ className?: string }>
   value: string
   label: string
   iconColor: string

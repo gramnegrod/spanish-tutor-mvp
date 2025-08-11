@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -13,6 +14,7 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const { signIn } = useAuth()
+  const router = useRouter()
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -25,7 +27,8 @@ export default function LoginPage() {
     
     try {
       await signIn(email, password)
-      // AuthContext will handle redirect on successful sign in
+      // Navigate to home page after successful login
+      router.push('/')
     } catch (error) {
       console.error('Login error:', error)
       setError((error as Error).message || 'An error occurred during sign in')
@@ -78,19 +81,6 @@ export default function LoginPage() {
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Sign In
             </Button>
-            <div className="relative w-full">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-white px-2 text-gray-500">Or</span>
-              </div>
-            </div>
-            <Link href="/practice-no-auth" className="w-full">
-              <Button type="button" variant="outline" className="w-full">
-                Continue without account
-              </Button>
-            </Link>
             <p className="text-sm text-center text-gray-600">
               Don&apos;t have an account?{' '}
               <Link href="/register" className="text-blue-600 hover:underline">

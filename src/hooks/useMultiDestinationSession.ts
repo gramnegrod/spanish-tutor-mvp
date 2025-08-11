@@ -7,7 +7,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { usePracticeSession } from './usePracticeSession';
 import { buildPrompt, addScenarioContext } from '@/lib/npc-system';
 import { loadNPC } from '@/lib/npc-system/dynamic-loader';
-import { NPC, NPCLoadResult } from '@/lib/npc-system/types';
+import { NPC, NPCLoadResult, Destination } from '@/lib/npc-system/types';
 import { LearnerProfile } from '@/lib/pedagogical-system';
 
 export interface UseMultiDestinationSessionOptions {
@@ -65,9 +65,9 @@ export function useMultiDestinationSession(
         }
         
         // Create a simple destination object since we're not using the full system
-        const destination: any = {
+        const destination: Destination = {
           id: destinationId,
-          name: destinationId.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase()),
+          city: destinationId.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase()),
           description: '',
           npcs: [npc]
         };

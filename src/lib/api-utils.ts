@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { createSecureResponse } from './api-security'
 
 /**
  * Safe error response that doesn't expose internal details
@@ -13,8 +14,8 @@ export function errorResponse(
     console.error(`[API Error] ${message}:`, error)
   }
   
-  // Return generic message to client
-  return NextResponse.json(
+  // Return generic message to client with security headers
+  return createSecureResponse(
     { error: message },
     { status }
   )
@@ -30,7 +31,10 @@ export function withErrorHandling<T extends any[], R>(
     try {
       return await handler(...args)
     } catch (error) {
-      return errorResponse('Internal server error', 500, error)
+      return createSecureResponse(
+        { error: 'Internal server error' },
+        { status: 500 }
+      )
     }
   }
 }

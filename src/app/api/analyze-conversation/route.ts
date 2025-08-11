@@ -1,15 +1,46 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import OpenAI from 'openai'
+import { z } from 'zod'
+import { withSecurity, validateRequest, createSecureResponse, sanitizeText } from '@/lib/api-security'
+import { createClient } from '@/utils/supabase/server'
+import { dbHelpers } from '@/lib/supabase-db'
 
-export async function POST(request: NextRequest) {
+// Input validation schema
+const analyzeConversationSchema = z.object({
+  transcript: z.string().min(1).max(50000).transform(sanitizeText),
+  events: z.array(z.any()).optional(),
+  scenarioGoals: z.array(z.string()).optional(),
+  userLevel: z.enum(['beginner', 'intermediate', 'advanced', 'native'])
+})
+
+async function handler(request: NextRequest) {
   try {
+    // Authenticate user
+    const supabase = await createClient()
+    const user = await dbHelpers.getCurrentUser(supabase)
+    if (!user) {
+      return createSecureResponse(
+        { error: 'Authentication required' },
+        { status: 401 }
+      )
+    }
+
+    // Validate and sanitize input
+    const validation = await validateRequest(request, analyzeConversationSchema)
+    if (!validation.success) {
+      return createSecureResponse(
+        { error: validation.error },
+        { status: 400 }
+      )
+    }
+
+    const { transcript, events, scenarioGoals, userLevel } = validation.data
+
     const apiKey = process.env.OPENAI_API_KEY || process.env.NEXT_PUBLIC_OPENAI_API_KEY;
-    
-    // Security: Removed unnecessary logging
     
     if (!apiKey) {
       console.error('No OpenAI API key found in environment variables');
-      return NextResponse.json(
+      return createSecureResponse(
         { error: 'OpenAI API key not configured. Please set OPENAI_API_KEY environment variable.' },
         { status: 500 }
       );
@@ -18,15 +49,6 @@ export async function POST(request: NextRequest) {
     const openai = new OpenAI({
       apiKey: apiKey
     })
-
-    const { transcript, events, scenarioGoals, userLevel } = await request.json()
-
-    if (!transcript || !userLevel) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      )
-    }
 
     // Call GPT-4.1 for analysis
     const response = await openai.chat.completions.create({
@@ -62,7 +84,8 @@ export async function POST(request: NextRequest) {
 
     const analysisResult = JSON.parse(response.choices[0].message.content || '{}')
 
-    return NextResponse.json({
+    // Sanitize output
+    return createSecureResponse({
       wins: analysisResult.wins || [],
       mistakes: analysisResult.mistakes || [],
       corrections: analysisResult.corrections || [],
@@ -71,17 +94,27 @@ export async function POST(request: NextRequest) {
       recommendations: analysisResult.recommendations || []
     })
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Analysis API error:', error)
     
     // Return more detailed error in development
     const errorMessage = process.env.NODE_ENV === 'development' 
-      ? error.message || 'Unknown error'
+      ? (error instanceof Error ? error.message : 'Unknown error')
       : 'Internal server error'
     
-    return NextResponse.json(
+    return createSecureResponse(
       { error: errorMessage },
       { status: 500 }
     )
   }
 }
+
+// Export with security wrapper
+export const POST = withSecurity(handler, {
+  rateLimit: {
+    windowMs: 60 * 1000, // 1 minute
+    maxRequests: 30 // 30 requests per minute
+  },
+  maxBodySize: 1024 * 1024, // 1MB
+  requireAuth: true
+})

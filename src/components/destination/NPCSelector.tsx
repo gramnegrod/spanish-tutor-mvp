@@ -140,7 +140,7 @@ export function NPCSelector() {
                 )}
                 {npc.learning_goals && npc.learning_goals.length > 0 && (
                   <div className="mt-3">
-                    <p className="font-medium mb-1">You'll practice:</p>
+                    <p className="font-medium mb-1">You&apos;ll practice:</p>
                     <ul className="list-disc list-inside text-gray-600">
                       {npc.learning_goals.slice(0, 2).map((goal, i) => (
                         <li key={i}>{goal}</li>

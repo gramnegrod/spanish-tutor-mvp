@@ -6,11 +6,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { AlertCircle, RefreshCw, Save, Download } from 'lucide-react'
 import { logError } from '@/lib/error-logging'
 
+// Generic type for saved state data
+type SavedStateData = Record<string, unknown> | null
+
 interface Props {
   children: ReactNode
   onRecover?: () => Promise<void>
-  saveState?: () => any
-  restoreState?: (state: any) => void
+  saveState?: () => SavedStateData
+  restoreState?: (state: SavedStateData) => void
   fallback?: ReactNode
 }
 
@@ -18,7 +21,7 @@ interface State {
   hasError: boolean
   error?: Error
   isRecovering: boolean
-  savedState?: any
+  savedState?: SavedStateData
 }
 
 export class RecoverableErrorBoundary extends Component<Props, State> {
