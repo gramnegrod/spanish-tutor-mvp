@@ -8,7 +8,13 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { LearnerProfile } from '@/lib/pedagogical-system'
-import type { AdaptationProgress } from './usePracticeSession'
+
+export interface AdaptationProgress {
+  mode: 'helper' | 'immersion'
+  progress: number
+  target: number
+  description: string
+}
 
 export interface AdaptationNotification {
   type: 'switched_to_helper' | 'switched_to_immersion' | 'building_confidence' | 'need_practice';

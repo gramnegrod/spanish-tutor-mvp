@@ -72,8 +72,7 @@ export class AudioPipeline {
           noiseSuppression: this.config.noiseSuppression,
           autoGainControl: this.config.autoGainControl,
           sampleRate: this.config.sampleRate,
-          channelCount: 1, // Mono audio for OpenAI
-          latency: 0.01 // Low latency for real-time processing
+          channelCount: 1 // Mono audio for OpenAI
         }
       });
 
@@ -422,7 +421,7 @@ export class AudioPipeline {
   private isBrowserSupported(): boolean {
     return !!(
       navigator.mediaDevices &&
-      navigator.mediaDevices.getUserMedia &&
+      typeof navigator.mediaDevices.getUserMedia === 'function' &&
       window.AudioContext &&
       window.MediaStreamAudioSourceNode
     );

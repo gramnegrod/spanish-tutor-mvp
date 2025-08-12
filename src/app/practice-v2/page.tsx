@@ -2,7 +2,7 @@
 
 import React, { Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { useMultiDestinationSession } from '@/hooks/useMultiDestinationSession'
+import { usePracticeSession } from '@/hooks/usePracticeSession'
 import { PracticeLayout } from '@/components/practice/PracticeLayout'
 import { ConversationSession } from '@/components/practice/ConversationSession'
 import { VoiceControl } from '@/components/practice/VoiceControl'
@@ -24,23 +24,23 @@ function PracticeContent() {
   const adventureId = searchParams.get('adventure')
   const scenarioId = searchParams.get('scenario')
   
-  const session = useMultiDestinationSession({
+  const session = usePracticeSession({
+    scenario: 'general',  // Default scenario, will be updated once NPC loads
+    npcName: 'Loading...',  // Placeholder, will be updated once NPC loads
+    npcDescription: 'Loading character information...',  // Placeholder
     destinationId,
     npcId,
-    mode: mode as 'single' | 'adventure',
     enableAuth: !guestMode,  // Disable auth for guest mode
     enableAdaptation: true,
     enableAnalysis: true,
-    autoConnect: false,  // Don't auto-connect, wait for manual connection
-    adventureId,  // Pass adventure ID if present
-    scenarioId    // Pass scenario ID if present
+    autoConnect: false  // Don't auto-connect, wait for manual connection
   })
   
   const {
     // NPC data
     npc,
-    isLoading,
-    error,
+    npcLoading,
+    npcError,
     
     // Connection state
     isConnected,
@@ -88,7 +88,7 @@ function PracticeContent() {
     ? Math.floor((Date.now() - conversationStartTime.getTime()) / 1000)
     : 0
   
-  if (isLoading) {
+  if (npcLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
@@ -96,7 +96,7 @@ function PracticeContent() {
     )
   }
   
-  if (error || !npc) {
+  if (npcError || !npc) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Card className="max-w-md">
@@ -104,7 +104,7 @@ function PracticeContent() {
             <CardTitle>Error Loading Practice Session</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-red-600">{error?.message || 'NPC not found'}</p>
+            <p className="text-red-600">{npcError || 'NPC not found'}</p>
             <p className="mt-2 text-sm text-gray-600">
               Try selecting a different character or refreshing the page.
             </p>

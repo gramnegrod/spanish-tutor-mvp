@@ -41,7 +41,7 @@ export class OpenAIRealtimeService {
     
     this.config = {
       tokenEndpoint: '/api/session',
-      model: 'gpt-4o-realtime-preview-2024-12-17',
+      model: config.model || 'gpt-4o-mini-realtime-preview', // Use cheaper mini model by default
       voice: 'alloy',
       instructions: 'You are a helpful assistant.',
       temperature: 0.8,

@@ -7,7 +7,9 @@ import { useRouter } from 'next/navigation';
 import { usePracticeSession } from '../usePracticeSession';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOpenAIRealtime } from '../useOpenAIRealtime';
-import { LanguageLearningDB } from '@/lib/language-learning-db';
+import { useNPCLoader } from '../useNPCLoader';
+import { useSessionPersistence } from '../useSessionPersistence';
+import { useSessionAnalytics } from '../useSessionAnalytics';
 
 // Mock dependencies
 jest.mock('next/navigation', () => ({
@@ -20,6 +22,19 @@ jest.mock('@/contexts/AuthContext', () => ({
 
 jest.mock('../useOpenAIRealtime', () => ({
   useOpenAIRealtime: jest.fn()
+}));
+
+// Mock new hooks
+jest.mock('../useNPCLoader', () => ({
+  useNPCLoader: jest.fn()
+}));
+
+jest.mock('../useSessionPersistence', () => ({
+  useSessionPersistence: jest.fn()
+}));
+
+jest.mock('../useSessionAnalytics', () => ({
+  useSessionAnalytics: jest.fn()
 }));
 
 // Mock for useConversationState - define default implementation
@@ -69,39 +84,22 @@ jest.mock('../usePracticeAdaptation', () => ({
   }))
 }));
 
-jest.mock('@/lib/language-learning-db', () => ({
-  LanguageLearningDB: {
-    createWithSupabase: jest.fn(() => ({
-      profiles: {
-        get: jest.fn(),
-        update: jest.fn()
-      },
-      saveConversation: jest.fn(),
-      progress: {
-        update: jest.fn()
-      }
-    })),
-    createWithLocalStorage: jest.fn(() => ({
-      profiles: {
-        get: jest.fn(),
-        update: jest.fn()
-      },
-      saveConversation: jest.fn(),
-      progress: {
-        update: jest.fn()
-      }
-    }))
-  }
-}));
 
 describe('usePracticeSession', () => {
   const mockPush = jest.fn();
   const mockUser = { id: 'test-user-id', email: 'test@example.com' };
   
+  // Mock functions for new hooks
+  const mockSaveSession = jest.fn();
+  const mockLoadProfile = jest.fn();
+  const mockSaveProfile = jest.fn();
+  
   const defaultOptions = {
     scenario: 'restaurant',
     npcName: 'María',
-    npcDescription: 'A friendly waiter at a Mexican restaurant'
+    npcDescription: 'A friendly waiter at a Mexican restaurant',
+    destinationId: 'mexico-city',
+    npcId: 'maria'
   };
 
   const mockOpenAIRealtimeReturn = {
@@ -133,14 +131,64 @@ describe('usePracticeSession', () => {
     mockSetCurrentSpeaker.mockClear();
     mockGetFullSpanishAnalysis.mockClear();
     mockGetDatabaseAnalysis.mockClear();
+    mockSaveSession.mockClear();
+    mockLoadProfile.mockClear();
+    mockSaveProfile.mockClear();
     
     // Reset mock return values
     mockGetFullSpanishAnalysis.mockReturnValue({});
     mockGetDatabaseAnalysis.mockReturnValue({});
+    mockSaveSession.mockResolvedValue(undefined);
+    mockLoadProfile.mockResolvedValue(null);
+    mockSaveProfile.mockResolvedValue(undefined);
     
     (useRouter as jest.Mock).mockReturnValue({ push: mockPush });
     (useAuth as jest.Mock).mockReturnValue({ user: mockUser, loading: false });
     (useOpenAIRealtime as jest.Mock).mockReturnValue(mockOpenAIRealtimeReturn);
+    
+    // Mock new hooks
+    (useNPCLoader as jest.Mock).mockReturnValue({
+      npc: {
+        id: 'maria',
+        name: 'María',
+        description: 'A friendly waiter at a Mexican restaurant',
+        personality: 'friendly',
+        culturalBackground: 'Mexico'
+      },
+      isLoading: false,
+      error: null,
+      customPrompt: 'You are María, a friendly waiter...'
+    });
+    
+    (useSessionPersistence as jest.Mock).mockReturnValue({
+      saveSession: mockSaveSession,
+      loadProfile: mockLoadProfile,
+      saveProfile: mockSaveProfile,
+      isReady: true
+    });
+    
+    (useSessionAnalytics as jest.Mock).mockReturnValue({
+      sessionStats: {
+        totalResponses: 0,
+        goodResponses: 0,
+        strugglingResponses: 0,
+        averageConfidence: 0,
+        improvementTrend: 'neutral',
+        streakCount: 0,
+        lastFewConfidences: [],
+        spanishWordsUsed: 0,
+        mexicanExpressionsUsed: 0,
+        essentialVocabCoverage: 0,
+        grammarAccuracy: 0,
+        successRate: 0,
+        vocabularyDiversity: 0,
+        culturalEngagement: 0,
+        isImproving: false
+      },
+      lastFeedback: null,
+      trackEvent: jest.fn(),
+      getAnalysis: jest.fn()
+    });
   });
 
   describe('Initialization', () => {
@@ -205,67 +253,59 @@ describe('usePracticeSession', () => {
     });
   });
 
-  describe('Database Integration', () => {
-    it('should create Supabase DB for authenticated users', () => {
-      process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://test.supabase.co';
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'test-key';
-
+  describe('Hook Integration', () => {
+    it('should initialize with new hooks', () => {
       renderHook(() => usePracticeSession(defaultOptions));
 
-      expect(LanguageLearningDB.createWithSupabase).toHaveBeenCalledWith({
-        url: 'https://test.supabase.co',
-        apiKey: 'test-key'
+      expect(useNPCLoader).toHaveBeenCalledWith({
+        destinationId: 'mexico-city',
+        npcId: 'maria',
+        learnerProfile: expect.objectContaining({
+          level: 'beginner',
+          comfortWithSlang: false,
+          needsMoreEnglish: true
+        }),
+        scenario: 'restaurant'
       });
+      
+      expect(useSessionPersistence).toHaveBeenCalledWith({ enableAuth: true });
+      expect(useSessionAnalytics).toHaveBeenCalled();
     });
 
-    it('should create localStorage DB for guest users', () => {
-      (useAuth as jest.Mock).mockReturnValue({ user: null, loading: false });
-
-      renderHook(() => 
-        usePracticeSession({
-          ...defaultOptions,
-          enableAuth: false
-        })
-      );
-
-      expect(LanguageLearningDB.createWithLocalStorage).toHaveBeenCalled();
-    });
-
-    it('should load user adaptations on mount', async () => {
+    it('should load user profile on mount', async () => {
       const mockProfile = {
-        level: 'intermediate',
-        strugglingAreas: ['subjuntivo'],
-        masteredConcepts: ['presente'],
-        preferences: {
-          culturalContext: true,
-          supportLevel: 'moderate'
-        }
+        level: 'intermediate' as const,
+        comfortWithSlang: true,
+        needsMoreEnglish: false,
+        strugglingWords: ['subjuntivo'],
+        masteredPhrases: ['presente']
       };
 
-      const mockDB = {
-        profiles: {
-          get: jest.fn().mockResolvedValue(mockProfile),
-          update: jest.fn()
-        }
-      };
-
-      (LanguageLearningDB.createWithSupabase as jest.Mock).mockReturnValue(mockDB);
+      mockLoadProfile.mockResolvedValue(mockProfile);
 
       const { result } = renderHook(() => usePracticeSession(defaultOptions));
 
       await waitFor(() => {
-        expect(mockDB.profiles.get).toHaveBeenCalledWith('test-user-id', 'es');
+        expect(mockLoadProfile).toHaveBeenCalled();
       });
 
       await waitFor(() => {
-        expect(result.current.learnerProfile).toEqual({
-          level: 'intermediate',
-          comfortWithSlang: true,
-          needsMoreEnglish: false,
-          strugglingWords: ['subjuntivo'],
-          masteredPhrases: ['presente']
-        });
+        expect(result.current.learnerProfile).toEqual(mockProfile);
       });
+    });
+
+    it('should use NPC data in return values', () => {
+      const { result } = renderHook(() => usePracticeSession(defaultOptions));
+
+      expect(result.current.npc).toEqual({
+        id: 'maria',
+        name: 'María',
+        description: 'A friendly waiter at a Mexican restaurant',
+        personality: 'friendly',
+        culturalBackground: 'Mexico'
+      });
+      expect(result.current.npcLoading).toBe(false);
+      expect(result.current.npcError).toBeNull();
     });
   });
 
@@ -346,6 +386,20 @@ describe('usePracticeSession', () => {
     it('should use custom instructions when provided', () => {
       const customInstructions = jest.fn((profile) => `Custom prompt for ${profile.level}`);
 
+      // Mock NPC loader to not provide a custom prompt so custom instructions are used
+      (useNPCLoader as jest.Mock).mockReturnValue({
+        npc: {
+          id: 'maria',
+          name: 'María',
+          description: 'A friendly waiter at a Mexican restaurant',
+          personality: 'friendly',
+          culturalBackground: 'Mexico'
+        },
+        isLoading: false,
+        error: null,
+        customPrompt: null // No custom prompt from NPC
+      });
+
       renderHook(() => 
         usePracticeSession({
           ...defaultOptions,
@@ -403,19 +457,11 @@ describe('usePracticeSession', () => {
   describe('Session Management', () => {
     it('should handle end conversation', async () => {
       const mockDisconnect = jest.fn();
-      const mockDB = {
-        saveConversation: jest.fn().mockResolvedValue(undefined),
-        progress: {
-          update: jest.fn().mockResolvedValue(undefined)
-        }
-      };
 
       (useOpenAIRealtime as jest.Mock).mockReturnValue({
         ...mockOpenAIRealtimeReturn,
         disconnect: mockDisconnect
       });
-
-      (LanguageLearningDB.createWithSupabase as jest.Mock).mockReturnValue(mockDB);
 
       // Mock transcript data
       const mockTranscriptManager = {
@@ -466,7 +512,7 @@ describe('usePracticeSession', () => {
       expect(result.current.isAnalyzing).toBe(false);
       expect(result.current.showSummary).toBe(true);
 
-      expect(mockDB.saveConversation).toHaveBeenCalledWith(
+      expect(mockSaveSession).toHaveBeenCalledWith(
         expect.objectContaining({
           title: expect.stringContaining('María'),
           persona: 'María',
@@ -477,16 +523,6 @@ describe('usePracticeSession', () => {
           duration: expect.any(Number),
           language: 'es',
           scenario: 'restaurant'
-        }),
-        { id: 'test-user-id', email: 'test-user-id' }
-      );
-
-      expect(mockDB.progress.update).toHaveBeenCalledWith(
-        'test-user-id',
-        'es',
-        expect.objectContaining({
-          totalMinutesPracticed: 1,
-          conversationsCompleted: 1
         })
       );
     });
@@ -547,19 +583,10 @@ describe('usePracticeSession', () => {
 
     it('should handle close summary', async () => {
       const mockDisconnect = jest.fn();
-      const mockDB = {
-        saveConversation: jest.fn().mockResolvedValue({ id: 'test-id' }),
-        progress: {
-          update: jest.fn().mockResolvedValue(undefined)
-        }
-      };
-
       (useOpenAIRealtime as jest.Mock).mockReturnValue({
         ...mockOpenAIRealtimeReturn,
         disconnect: mockDisconnect
       });
-
-      (LanguageLearningDB.createWithSupabase as jest.Mock).mockReturnValue(mockDB);
 
       const mockTranscriptManager = {
         transcripts: [{ role: 'user', text: 'Test' }],
@@ -617,14 +644,7 @@ describe('usePracticeSession', () => {
 
   describe('Error Handling', () => {
     it('should handle conversation save failure gracefully', async () => {
-      const mockDB = {
-        saveConversation: jest.fn().mockRejectedValue(new Error('Save failed')),
-        progress: {
-          update: jest.fn()
-        }
-      };
-
-      (LanguageLearningDB.createWithSupabase as jest.Mock).mockReturnValue(mockDB);
+      mockSaveSession.mockRejectedValue(new Error('Save failed'));
 
       const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {});
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
@@ -686,14 +706,7 @@ describe('usePracticeSession', () => {
     });
 
     it('should handle profile load failure', async () => {
-      const mockDB = {
-        profiles: {
-          get: jest.fn().mockRejectedValue(new Error('Load failed')),
-          update: jest.fn()
-        }
-      };
-
-      (LanguageLearningDB.createWithSupabase as jest.Mock).mockReturnValue(mockDB);
+      mockLoadProfile.mockRejectedValue(new Error('Load failed'));
 
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -701,7 +714,7 @@ describe('usePracticeSession', () => {
 
       await waitFor(() => {
         expect(consoleErrorSpy).toHaveBeenCalledWith(
-          '[usePracticeSession] Failed to load adaptations:',
+          '[usePracticeSession] Failed to load profile:',
           expect.any(Error)
         );
       });
@@ -731,15 +744,6 @@ describe('usePracticeSession', () => {
     });
 
     it('should save user adaptations', async () => {
-      const mockDB = {
-        profiles: {
-          get: jest.fn(),
-          update: jest.fn().mockResolvedValue(undefined)
-        }
-      };
-
-      (LanguageLearningDB.createWithSupabase as jest.Mock).mockReturnValue(mockDB);
-
       const { result } = renderHook(() => usePracticeSession(defaultOptions));
 
       // Wait for the hook to initialize
@@ -776,21 +780,7 @@ describe('usePracticeSession', () => {
           await onSaveProfile(newProfile);
         });
 
-        expect(mockDB.profiles.update).toHaveBeenCalledWith(
-          'test-user-id',
-          'es',
-          {
-            level: 'intermediate',
-            strugglingAreas: ['subjuntivo'],
-            masteredConcepts: ['saludos', 'despedidas'],
-            preferences: {
-              learningStyle: 'mixed',
-              pace: 'normal',
-              supportLevel: 'moderate',
-              culturalContext: true
-            }
-          }
-        );
+        expect(mockSaveProfile).toHaveBeenCalledWith(newProfile);
       }
     });
   });

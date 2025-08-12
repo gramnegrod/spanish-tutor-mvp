@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Mic, Loader2, RefreshCw, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { LearnerProfile } from '@/lib/pedagogical-system'
 import { useState, useEffect } from 'react'
-import type { AdaptationProgress } from '@/hooks/usePracticeSession'
+import type { AdaptationProgress } from '@/hooks/usePracticeAdaptation'
 
 interface VoiceControlProps {
   isConnected: boolean;

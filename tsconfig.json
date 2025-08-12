@@ -29,6 +29,7 @@
     "**/*.test.tsx",
     "**/__tests__/**",
     "**/test/**",
-    "packages/openai-realtime-webrtc/src/__tests__/**"
+    "packages/openai-realtime-webrtc/src/__tests__/**",
+    "packages/**/*backup*/**"
   ]
 }

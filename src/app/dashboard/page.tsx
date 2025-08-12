@@ -10,12 +10,22 @@ import { Progress } from '@/types'
 import { Mic, LogOut, Trophy, Calendar } from 'lucide-react'
 import { formatDuration, safeFormatDate } from '@/lib/utils'
 
+interface Conversation {
+  id: string
+  title: string
+  createdAt: string
+  duration?: number
+  analysis?: {
+    keyLearnings?: string[]
+  }
+}
+
 export default function DashboardPage() {
   const { user, loading, signOut } = useAuth()
   const router = useRouter()
   const [progress, setProgress] = useState<Progress | null>(null)
   const [streak, setStreak] = useState(0)
-  const [conversations, setConversations] = useState<unknown[]>([])
+  const [conversations, setConversations] = useState<Conversation[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   const fetchData = useCallback(async () => {

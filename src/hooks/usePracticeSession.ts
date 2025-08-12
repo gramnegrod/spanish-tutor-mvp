@@ -1,29 +1,27 @@
 'use client'
 
-import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { useOpenAIRealtime } from '@/hooks/useOpenAIRealtime'
 import { useConversationState, SessionStats, ComprehensionFeedback } from '@/hooks/useConversationState'
-import { usePracticeAdaptation, AdaptationNotification } from '@/hooks/usePracticeAdaptation'
+import { usePracticeAdaptation, AdaptationNotification, AdaptationProgress } from '@/hooks/usePracticeAdaptation'
+import { useNPCLoader } from '@/hooks/useNPCLoader'
+import { useSessionPersistence } from '@/hooks/useSessionPersistence'
+import { useSessionAnalytics } from '@/hooks/useSessionAnalytics'
 import { generateAdaptivePrompt, LearnerProfile } from '@/lib/pedagogical-system'
-import { LanguageLearningDB } from '@/lib/language-learning-db'
 import type { ConversationTranscript } from '@/types'
 import type { CostTracking, SessionInfo } from '@/services/openai-realtime/types'
 import type { SpanishConversationAnalysis } from '@/lib/spanish-analysis/types'
+import type { NPC } from '@/lib/npc-system/types'
 
 // Types for interfaces that are not yet defined elsewhere
-export interface AdaptationProgress {
-  mode: 'helper' | 'immersion'
-  progress: number
-  target: number
-  description: string
-}
-
 export interface UsePracticeSessionOptions {
   scenario: string
   npcName: string
   npcDescription: string
+  destinationId: string
+  npcId: string
   enableAuth?: boolean
   enableAdaptation?: boolean
   enableAnalysis?: boolean
@@ -61,6 +59,11 @@ export interface UsePracticeSessionReturn {
   // Learner profile
   learnerProfile: LearnerProfile
   
+  // NPC data
+  npc: NPC | null
+  npcLoading: boolean
+  npcError: string | null
+  
   // Adaptation
   showAdaptationNotification: AdaptationNotification | null
   adaptationProgress: AdaptationProgress | null
@@ -84,6 +87,8 @@ export function usePracticeSession({
   scenario,
   npcName,
   npcDescription,
+  destinationId,
+  npcId,
   enableAuth = true,
   enableAdaptation = true,
   enableAnalysis = true,
@@ -107,14 +112,21 @@ export function usePracticeSession({
     ...initialProfile
   })
   
-  // We'll define saveUserAdaptations after DB initialization to avoid circular dependency
-  const saveUserAdaptationsRef = useRef<((profile: LearnerProfile) => Promise<void>) | null>(null)
+  // Initialize new hooks
+  const { saveSession, loadProfile, saveProfile } = useSessionPersistence({ enableAuth })
+  
+  const { npc, isLoading: npcLoading, error: npcError, customPrompt } = useNPCLoader({
+    destinationId,
+    npcId,
+    learnerProfile,
+    scenario
+  })
   
   // Initialize conversation state (combines transcript management and conversation engine)
   const conversationState = useConversationState({
     learnerProfile,
     onProfileUpdate: setLearnerProfile,
-    onSaveProfile: saveUserAdaptationsRef.current || undefined,
+    onSaveProfile: saveProfile,
     scenario: enableAnalysis ? scenario : undefined
   })
   
@@ -130,63 +142,34 @@ export function usePracticeSession({
     lastComprehensionFeedback,
     getFullSpanishAnalysis
   } = conversationState
-  
-  // Initialize Language Learning DB
-  const db = useMemo(() => {
-    if (typeof window === 'undefined') return null
-    
-    if (enableAuth && user) {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-      const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-      if (supabaseUrl && supabaseKey) {
-        return LanguageLearningDB.createWithSupabase({ url: supabaseUrl, apiKey: supabaseKey })
-      }
-    }
-    
-    // Use localStorage for guest mode
-    return LanguageLearningDB.createWithLocalStorage()
-  }, [enableAuth, user])
-  
-  // Save profile to database
-  const saveUserAdaptations = useCallback(async (profile: LearnerProfile) => {
-    if (!db) return
-    if (enableAuth && !user) return
-    
-    try {
-      const userId = user?.id || 'guest'
-      await db.profiles.update(userId, 'es', {
-        level: profile.level,
-        strugglingAreas: profile.strugglingWords,
-        masteredConcepts: profile.masteredPhrases,
-        preferences: {
-          learningStyle: 'mixed',
-          pace: 'normal',
-          supportLevel: profile.needsMoreEnglish ? 'heavy' : 'moderate',
-          culturalContext: profile.comfortWithSlang
-        }
-      })
-    } catch (error) {
-      console.error('[usePracticeSession] Failed to save adaptations:', error)
-    }
-  }, [db, enableAuth, user])
-  
-  // Set the ref after the function is defined
-  useEffect(() => {
-    saveUserAdaptationsRef.current = saveUserAdaptations
-  }, [saveUserAdaptations])
+
+  // Initialize session analytics
+  const analytics = useSessionAnalytics({
+    sessionStats,
+    lastFeedback: lastComprehensionFeedback,
+    getAnalysis: getFullSpanishAnalysis
+  })
   
   // Generate AI instructions
   const generateInstructions = useCallback((profile: LearnerProfile) => {
-    // Use custom instructions if provided, otherwise use default
+    // First try to use the custom prompt from NPC loader
+    if (customPrompt) {
+      console.log('🎭 [PracticeSession] Using NPC custom prompt for:', npcName)
+      console.log('🎭 [PracticeSession] Prompt preview:', customPrompt.substring(0, 200) + '...')
+      return customPrompt
+    }
+    
+    // Use custom instructions if provided
     if (customInstructions) {
       const instructions = customInstructions(profile)
       console.log('🎭 [PracticeSession] Using custom instructions for:', npcName)
       console.log('🎭 [PracticeSession] Instructions preview:', instructions.substring(0, 200) + '...')
       return instructions
     }
+    
     console.log('⚠️ [PracticeSession] Falling back to default prompt for:', npcName)
     return generateAdaptivePrompt(npcName, npcDescription, profile)
-  }, [npcName, npcDescription, customInstructions])
+  }, [npcName, npcDescription, customInstructions, customPrompt])
   
   // Keep a ref to the conversation state for callbacks
   const conversationStateRef = useRef(conversationState)
@@ -226,7 +209,7 @@ export function usePracticeSession({
       language: 'es'
     },
     instructions: generateInstructions(learnerProfile),
-    voice: 'alloy',
+    voice: 'alloy', // TODO: Map NPC voices to realtime API voices
     autoConnect: autoConnect && !loading && (!enableAuth || !!user),
     turnDetection: {
       type: 'server_vad',
@@ -242,7 +225,7 @@ export function usePracticeSession({
     learnerProfile,
     onProfileUpdate: setLearnerProfile,
     onInstructionsUpdate: updateInstructions,
-    onSaveProfile: saveUserAdaptations,
+    onSaveProfile: saveProfile,
     generateInstructions
   })
   
@@ -256,33 +239,31 @@ export function usePracticeSession({
   // Add ref to track previous instructions to prevent duplicate updates
   const previousInstructionsRef = useRef<string>('')
 
-  // Update instructions when custom instructions change
+  // Update instructions when custom prompt or instructions change
   useEffect(() => {
-    if (customInstructions) {
-      const newInstructions = generateInstructions(learnerProfile)
+    const newInstructions = generateInstructions(learnerProfile)
+    
+    // Only update if instructions have actually changed
+    if (newInstructions !== previousInstructionsRef.current) {
+      console.log('✅ [PracticeSession] Instructions changed, updating...')
+      console.log('🔄 [PracticeSession] Previous instructions:', previousInstructionsRef.current.substring(0, 50) + '...')
+      console.log('🔄 [PracticeSession] New instructions:', newInstructions.substring(0, 100) + '...')
       
-      // Only update if instructions have actually changed
-      if (newInstructions !== previousInstructionsRef.current) {
-        console.log('✅ [PracticeSession] Instructions changed, updating...')
-        console.log('🔄 [PracticeSession] Previous instructions:', previousInstructionsRef.current.substring(0, 50) + '...')
-        console.log('🔄 [PracticeSession] New instructions:', newInstructions.substring(0, 100) + '...')
-        
-        previousInstructionsRef.current = newInstructions
-        updateInstructions(newInstructions)
-        
-        // Force update if already connected
-        if (isConnected) {
-          console.log('🔄 [PracticeSession] Already connected, forcing session update')
-          // Small delay to ensure the update goes through
-          setTimeout(() => {
-            updateInstructions(newInstructions)
-          }, 100)
-        }
-      } else {
-        console.log('⏭️ [PracticeSession] Instructions unchanged, skipping update')
+      previousInstructionsRef.current = newInstructions
+      updateInstructions(newInstructions)
+      
+      // Force update if already connected
+      if (isConnected) {
+        console.log('🔄 [PracticeSession] Already connected, forcing session update')
+        // Small delay to ensure the update goes through
+        setTimeout(() => {
+          updateInstructions(newInstructions)
+        }, 100)
       }
+    } else {
+      console.log('⏭️ [PracticeSession] Instructions unchanged, skipping update')
     }
-  }, [customInstructions, learnerProfile, generateInstructions, isConnected]) // Removed updateInstructions from dependencies
+  }, [customInstructions, customPrompt, learnerProfile, generateInstructions, isConnected]) // Added customPrompt to dependencies
   
   // Log initial instructions
   useEffect(() => {
@@ -290,29 +271,23 @@ export function usePracticeSession({
     console.log('🎬 [PracticeSession] Initial npcName:', npcName)
   }, [])
   
-  // Load user adaptations
+  // Load user profile on initialization
   useEffect(() => {
-    if (!db || !user) return
-    
-    const loadAdaptations = async () => {
+    const loadProfileData = async () => {
       try {
-        const profile = await db.profiles.get(user.id, 'es')
+        const profile = await loadProfile()
         if (profile) {
-          setLearnerProfile({
-            level: profile.level as 'beginner' | 'intermediate' | 'advanced',
-            comfortWithSlang: profile.preferences?.culturalContext || false,
-            needsMoreEnglish: profile.preferences?.supportLevel === 'heavy',
-            strugglingWords: profile.strugglingAreas || [],
-            masteredPhrases: profile.masteredConcepts || []
-          })
+          setLearnerProfile(profile)
         }
       } catch (error) {
-        console.error('[usePracticeSession] Failed to load adaptations:', error)
+        console.error('[usePracticeSession] Failed to load profile:', error)
       }
     }
     
-    loadAdaptations()
-  }, [db, user])
+    if (user) {
+      loadProfileData()
+    }
+  }, [user, loadProfile])
   
   // Connection handlers
   const connect = useCallback(async () => {
@@ -348,50 +323,32 @@ export function usePracticeSession({
       : 0
     
     try {
-      if (db) {
-        const userId = (enableAuth && user) ? user.id : 'guest'
-        
-        // Transform transcripts to match expected format
-        // We trust that transcripts are valid since we filter at the source
-        const transformedTranscripts = transcripts.map(t => ({
-          id: t.id,
-          speaker: t.speaker as 'user' | 'assistant' | 'system',
-          text: t.text,
-          timestamp: t.timestamp instanceof Date ? t.timestamp.toISOString() : t.timestamp
-        }))
-        
-        // Save conversation
-        await db.saveConversation({
-          title: `${npcName} - ${new Date().toLocaleTimeString()}`,
-          persona: npcName,
-          transcript: transformedTranscripts,
-          duration,
-          language: 'es',
-          scenario
-        }, { id: userId, email: userId })
-        
-        // Update progress
-        await db.progress.update(userId, 'es', {
-          totalMinutesPracticed: Math.ceil(duration / 60),
-          conversationsCompleted: 1
-        })
-      }
+      // Transform transcripts to match expected format
+      const transformedTranscripts = transcripts.map(t => ({
+        id: t.id,
+        speaker: t.speaker as 'user' | 'assistant' | 'system',
+        text: t.text,
+        timestamp: t.timestamp instanceof Date ? t.timestamp.toISOString() : t.timestamp
+      }))
+      
+      // Save session using persistence hook
+      await saveSession({
+        title: `${npcName} - ${new Date().toLocaleTimeString()}`,
+        persona: npcName,
+        transcript: transformedTranscripts,
+        duration,
+        language: 'es',
+        scenario
+      })
       
       setShowSummary(true)
     } catch (error) {
       console.error('[usePracticeSession] Failed to save conversation:', error)
-      console.error('[usePracticeSession] Error details:', {
-        error,
-        db: !!db,
-        user: user?.id || 'guest',
-        transcripts: transcripts.length,
-        enableAuth
-      })
       alert(`Session completed but analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
     } finally {
       setIsAnalyzing(false)
     }
-  }, [transcripts, conversationStartTime, disconnect, db, enableAuth, user, npcName, scenario])
+  }, [transcripts, conversationStartTime, disconnect, saveSession, npcName, scenario])
   
   const handleRestart = useCallback(() => {
     clearTranscripts()
@@ -433,13 +390,18 @@ export function usePracticeSession({
     handleCloseSummary,
     
     // Analytics
-    sessionStats,
+    sessionStats: analytics.sessionStats,
     lastComprehensionFeedback,
     getFullSpanishAnalysis,
     costs,
     
     // Learner profile
     learnerProfile,
+    
+    // NPC data
+    npc,
+    npcLoading,
+    npcError,
     
     // Adaptation
     showAdaptationNotification,

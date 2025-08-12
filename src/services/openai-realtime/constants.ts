@@ -4,11 +4,11 @@
 
 // Pricing constants - OpenAI Realtime API pricing as of Jan 2025
 export const PRICING = {
-  // Audio pricing is per minute, not per token!
-  audioInputPerMinute: 0.06,    // $0.06 per minute of audio input
-  audioOutputPerMinute: 0.24,   // $0.24 per minute of audio output
-  textInput: 5,                 // $5 per 1M tokens (not used in voice-only)
-  textOutput: 20,               // $20 per 1M tokens (not used in voice-only)
+  // Official gpt-4o-mini-realtime-preview pricing from OpenAI
+  audioInputPerMinute: 0.01,    // $10 per 1M audio tokens × 0.1M tokens/min = $0.01/min
+  audioOutputPerMinute: 0.04,   // $40 per 1M audio tokens × 0.1M tokens/min = $0.04/min
+  textInput: 0.6,               // $0.60 per 1M tokens
+  textOutput: 2.4,              // $2.40 per 1M tokens
 };
 
 // Session limits
